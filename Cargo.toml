@@ -1,8 +1,8 @@
 [package]
-name = "rustdesk"
-version = "1.4.6"
-authors = ["rustdesk <info@rustdesk.com>"]
-edition = "2021"
+name = "dwo_remote_support"
+version = "1.0.0"
+authors = ["DWO <kontakt@dwoberland.de>"]
+edition = "2026"
 build= "build.rs"
 description = "RustDesk Remote Desktop"
 default-run = "rustdesk"
@@ -232,7 +232,7 @@ hound = "3.5"
 docopt = "1.1"
 
 [package.metadata.bundle]
-name = "RustDesk"
+name = "DWO Remote-Support"
 identifier = "com.carriez.rustdesk"
 icon = ["res/32x32.png", "res/128x128.png", "res/128x128@2x.png"]
 osx_minimum_system_version = "10.14"

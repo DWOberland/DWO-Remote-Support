@@ -1,5 +1,5 @@
 [package]
-name = "dwo_remote_support"
+name = "rustdesk"
 version = "1.0.0"
 authors = ["DWO <kontakt@dwoberland.de>"]
 edition = "2021"
@@ -213,10 +213,10 @@ exclude = ["vdi/host", "examples/custom_plugin"]
 libxdo-sys = { path = "libs/libxdo-sys-stub" }
 
 [package.metadata.winres]
-LegalCopyright = "Copyright © 2025 Purslane Ltd. All rights reserved."
-ProductName = "RustDesk"
-FileDescription = "RustDesk Remote Desktop"
-OriginalFilename = "rustdesk.exe"
+LegalCopyright = "Copyright © 2026 Digitalwerk Oberland. All rights reserved."
+ProductName = "DWO Remote-Support"
+FileDescription = "DWO Remote-Support Client"
+OriginalFilename = "dwo_remote_support.exe"
 
 [target.'cfg(target_os="windows")'.build-dependencies]
 winres = "0.1"

@@ -2,7 +2,7 @@
 name = "dwo_remote_support"
 version = "1.0.0"
 authors = ["DWO <kontakt@dwoberland.de>"]
-edition = "2022"
+edition = "2021"
 build= "build.rs"
 description = "RustDesk Remote Desktop"
 default-run = "rustdesk"

@@ -735,8 +735,8 @@ jobs:
           CREATE_DMG="$(command -v create-dmg)"
           CREATE_DMG="$(readlink -f "$CREATE_DMG")"
           sed -i -e 's/MAXIMUM_UNMOUNTING_ATTEMPTS=3/MAXIMUM_UNMOUNTING_ATTEMPTS=7/' "$CREATE_DMG"
-          create-dmg --icon "DWO-Remote-Support.app" 200 190 --hide-extension "DWO-Remote-Support.app" --window-size 800 400 --app-drop-link 600 185 rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.dmg ./flutter/build/macos/Build/Products/Release/DWO-Remote-Support.app
-
+          create-dmg --volname "DWO-Remote-Support" --icon "DWO-Remote-Support.app" 200 190 --hide-extension "DWO-Remote-Support.app" --window-size 800 400 --app-drop-link 600 185 DWO-Remote-Support-${{ env.VERSION }}-${{ matrix.job.arch }}.dmg ./flutter/build/macos/Build/Products/Release/DWO-Remote-Support.app
+          
       - name: Upload unsigned macOS app
         if: env.UPLOAD_ARTIFACT == 'true'
         uses: actions/upload-artifact@master

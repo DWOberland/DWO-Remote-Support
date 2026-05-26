@@ -18,6 +18,8 @@ on:
         type: string
         default: "nightly"
 
+jobs:
+
 # NOTE: F-Droid builder script 'flutter/build_fdroid.sh' reads environment
 # variables from this workflow!
 #

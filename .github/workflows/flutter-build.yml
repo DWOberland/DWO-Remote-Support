@@ -99,9 +99,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          
+
       - name: Force update hbb_common
-         run: git submodule update --init --remote libs/hbb_common
+        run: git submodule update --init --remote libs/hbb_common
 
       - name: Restore bridge files
         uses: actions/download-artifact@master

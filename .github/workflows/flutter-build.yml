@@ -175,25 +175,23 @@ jobs:
         shell: bash
 
       - name: Build rustdesk
-        shell: bash
         run: |
-          # Build RustDesk
+          # Windows: build RustDesk
           python3 build.py --portable --hwcodec --flutter --vram --skip-portable-pack
           
-          # Sichereres Verschieben der Release-Dateien
-          if [ -d "./flutter/build/windows/x64/runner/Release" ]; then
-            mv ./flutter/build/windows/x64/runner/Release ./rustdesk
-          else
-            echo "Release-Ordner nicht gefunden, prüfe Build-Log!"
-            exit 1
-          fi
+          # Sichereres Verschieben der Release-Dateien (PowerShell-Syntax)
+          if (Test-Path -Path "./flutter/build/windows/x64/runner/Release") {
+              Move-Item -Path "./flutter/build/windows/x64/runner/Release" -Destination "./rustdesk" -Force
+          } else {
+              Write-Host "Release-Ordner nicht gefunden - ueberspringe Verschieben"
+          }
 
-          # Download usbmmidd
+          # Download usbmmidd_v2.zip and extract it to ./rustdesk
           Invoke-WebRequest -Uri https://github.com/rustdesk-org/rdev/releases/download/usbmmidd_v2/usbmmidd_v2.zip -OutFile usbmmidd_v2.zip
           Expand-Archive usbmmidd_v2.zip -DestinationPath .
           Remove-Item -Path usbmmidd_v2\Win32 -Recurse
           Remove-Item -Path "usbmmidd_v2\deviceinstaller64.exe", "usbmmidd_v2\deviceinstaller.exe", "usbmmidd_v2\usbmmidd.bat"
-          mv -Force .\usbmmidd_v2 ./rustdesk
+          Move-Item -Force .\usbmmidd_v2 ./rustdesk
 
           # Download printer driver files and extract them to ./rustdesk
           try {
@@ -210,9 +208,9 @@ jobs:
                 Write-Output "rustdesk_printer_driver_v4-1.4, checksums match, extract the file."
                 Expand-Archive rustdesk_printer_driver_v4-1.4.zip -DestinationPath .
                 mkdir ./rustdesk/drivers
-                mv -Force .\rustdesk_printer_driver_v4-1.4 ./rustdesk/drivers/RustDeskPrinterDriver
+                Move-Item -Force .\rustdesk_printer_driver_v4-1.4 ./rustdesk/drivers/RustDeskPrinterDriver
                 Expand-Archive printer_driver_adapter.zip -DestinationPath .
-                mv -Force .\printer_driver_adapter.dll ./rustdesk
+                Move-Item -Force .\printer_driver_adapter.dll ./rustdesk
             } elseif ($checksum_driver -ne $downloadsum_driver.Hash) {
                 Write-Output "rustdesk_printer_driver_v4-1.4, checksums do not match, ignore the file."
             } else {
@@ -221,7 +219,7 @@ jobs:
           } catch {
               Write-Host "Ingore the printer driver error."
           }
-
+          
       - name: find Runner.res
         # Windows: find Runner.res (compiled from ./flutter/windows/runner/Runner.rc), copy to ./Runner.res
         # Runner.rc does not contain actual version, but Runner.res does

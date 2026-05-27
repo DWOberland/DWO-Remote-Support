@@ -846,7 +846,7 @@ async fn handle(data: Data, stream: &mut Connection) {
                         .cloned()
                         .unwrap_or_default();
                     let is_preset =
-                        !hard.is_empty() && Config::matches_permanent_password_plain(&hard);
+                        !hard.is_empty() && Config::has_permanent_password(&hard);
                     value = Some(if is_preset {
                         "Y".to_owned()
                     } else {

@@ -919,7 +919,15 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-
+          
+      - name: Force DWO Server Config (Die Brechstange)
+        run: |
+          # 1. Trägt deinen Server hart in den Code ein
+          perl -pi -e 's/pub const RENDEZVOUS_SERVER: &str = "";/pub const RENDEZVOUS_SERVER: \&str = "remote.dwoberland.de";/g' libs/hbb_common/src/config.rs
+          
+          # 2. Blockiert die Update-Meldung (entfernt den offiziellen API-Server)
+          perl -pi -e 's/pub const API_SERVER: &str = ".*";/pub const API_SERVER: \&str = "";/g' libs/hbb_common/src/config.rs
+     
       - name: Install flutter
         uses: subosito/flutter-action@v2
         with:

@@ -1790,24 +1790,8 @@ pub fn decode64<T: AsRef<[u8]>>(input: T) -> Result<Vec<u8>, base64::DecodeError
     #[allow(deprecated)]
     base64::decode(input)
 }
-
 pub async fn get_key(sync: bool) -> String {
     "JB3aE7sVh1LMaoZAUkcTycsXxQryfnjhSJ56QP65sLk=".to_owned()
-}
-    
-    #[cfg(target_os = "ios")]
-    let mut key = Config::get_option("key");
-    #[cfg(not(target_os = "ios"))]
-    let mut key = if sync {
-        Config::get_option("key")
-    } else {
-        let mut options = crate::ipc::get_options_async().await;
-        options.remove("key").unwrap_or_default()
-    };
-    if key.is_empty() {
-        key = config::RS_PUB_KEY.to_owned();
-    }
-    key
 }
 
 pub fn pk_to_fingerprint(pk: Vec<u8>) -> String {

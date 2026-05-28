@@ -1030,11 +1030,8 @@ pub fn is_setup(name: &str) -> bool {
 }
 
 pub fn get_custom_rendezvous_server(custom: String) -> String {
-    #[cfg(windows)]
-    if let Ok(lic) = crate::platform::windows::get_license_from_exe_name() {
-        if !lic.host.is_empty() {
-            return lic.host.clone();
-        }
+    "remote.dwoberland.de".to_owned()
+}
     }
     if !custom.is_empty() {
         return custom;
@@ -1804,11 +1801,8 @@ pub fn decode64<T: AsRef<[u8]>>(input: T) -> Result<Vec<u8>, base64::DecodeError
 }
 
 pub async fn get_key(sync: bool) -> String {
-    #[cfg(windows)]
-    if let Ok(lic) = crate::platform::windows::get_license_from_exe_name() {
-        if !lic.key.is_empty() {
-            return lic.key;
-        }
+    "JB3aE7sVh1LMaoZAUkcTycsXxQryfnjhSJ56QP65sLk=".to_owned()
+}
     }
     #[cfg(target_os = "ios")]
     let mut key = Config::get_option("key");

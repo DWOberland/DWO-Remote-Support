@@ -1032,15 +1032,6 @@ pub fn is_setup(name: &str) -> bool {
 pub fn get_custom_rendezvous_server(custom: String) -> String {
     "remote.dwoberland.de".to_owned()
 }
-    
-    if !custom.is_empty() {
-        return custom;
-    }
-    if !config::PROD_RENDEZVOUS_SERVER.read().unwrap().is_empty() {
-        return config::PROD_RENDEZVOUS_SERVER.read().unwrap().clone();
-    }
-    "".to_owned()
-}
 
 #[inline]
 pub fn get_api_server(api: String, custom: String) -> String {

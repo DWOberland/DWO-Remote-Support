@@ -940,6 +940,7 @@ pub fn is_modifier(evt: &KeyEvent) -> bool {
 }
 
 pub fn check_software_update() {
+    return;
     if is_custom_client() {
         return;
     }

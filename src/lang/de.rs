@@ -745,5 +745,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("preset-password-in-use-tip", "Das voreingestellte Passwort wird derzeit verwendet."),
         ("Enable privacy mode", "Datenschutzmodus aktivieren"),
         ("allow-remote-toolbar-docking-any-edge", ""),
+        ("doc_mac_permission":, "https://helpcrm.dwoberland.de/books/support-faq/page/erforderliche-berechtigung-fur-macos"),
     ].iter().cloned().collect();
 }

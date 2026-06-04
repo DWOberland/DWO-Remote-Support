@@ -279,8 +279,8 @@ jobs:
           python preprocess.py --arp -d ../../rustdesk
           nuget restore msi.sln
           msbuild msi.sln -p:Configuration=Release -p:Platform=x64 /p:TargetVersion=Windows10
-          mv ./Package/bin/x64/Release/en-us/Package.msi ../../SignOutput/rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.msi
-          sha256sum ../../SignOutput/rustdesk-*.msi
+          mv ./Package/bin/x64/Release/en-us/Package.msi ../../SignOutput/dwo-remote-client-setup-${{ matrix.job.arch }}.msi
+          sha256sum ../../SignOutput/dwo-remote-client-setup-*.msi
 
       - name: Sign rustdesk self-extracted file
         if: env.UPLOAD_ARTIFACT == 'true' && env.SIGN_BASE_URL != '-2'
@@ -295,7 +295,7 @@ jobs:
           prerelease: true
           tag_name: ${{ env.TAG_NAME }}
           files: |
-            ./SignOutput/rustdesk-*.msi
+            ./SignOutput/dwo-remote-client-setup-*.msi
             ./SignOutput/rustdesk-*.exe
 
   # The fallback for the flutter version, we use Sciter for 32bit Windows.
@@ -776,7 +776,11 @@ jobs:
         run: |
           for name in DWO-Remote-Support*.dmg; do
             if [ -e "$name" ]; then
-              mv "$name" "${name%%.dmg}-${{ matrix.job.arch }}.dmg"
+              if [ "${{ matrix.job.arch }}" == "aarch64" ]; then
+                mv "$name" "dwo-remote-client-mac_aarm.dmg"
+              else
+                mv "$name" "dwo-remote-client-macx86.dmg"
+              fi
             fi
           done
 
@@ -787,7 +791,7 @@ jobs:
           prerelease: true
           tag_name: ${{ env.TAG_NAME }}
           files: |
-            DWO-Remote-Support*-${{ matrix.job.arch }}.dmg
+            dwo-remote-client-mac*.dmg
 
   publish_unsigned:
     needs:

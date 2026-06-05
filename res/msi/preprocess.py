@@ -73,7 +73,10 @@ def make_parser():
         help='Connection type, e.g. "incoming", "outgoing". Default is empty, means incoming-outgoing',
     )
     parser.add_argument(
-        "--app-name", type=str, default="RustDesk", help="The app name."
+        "--app-name", type=str, default="DWO Remote Client", help="The displayed app name."
+    )
+    parser.add_argument(
+        "--binary-name", type=str, default="rustdesk", help="The installed executable name without extension."
     )
     parser.add_argument(
         "-v", "--version", type=str, default="", help="The app version."
@@ -85,7 +88,7 @@ def make_parser():
         "-m",
         "--manufacturer",
         type=str,
-        default="PURSLANE",
+        default="Digitalwerk Oberland",
         help="The app manufacturer.",
     )
     return parser
@@ -111,13 +114,13 @@ def read_lines_and_start_index(file_path, tag_start, tag_end):
     return lines, index_start
 
 
-def insert_components_between_tags(lines, index_start, app_name, dist_dir):
+def insert_components_between_tags(lines, index_start, binary_name, dist_dir):
     indent = g_indent_unit * 3
     path = Path(dist_dir)
     idx = 1
     for file_path in path.glob("**/*"):
         if file_path.is_file():
-            if file_path.name.lower() == f"{app_name}.exe".lower():
+            if file_path.name.lower() == f"{binary_name}.exe".lower():
                 continue
 
             subdir = str(file_path.parent.relative_to(path))
@@ -139,28 +142,29 @@ def insert_components_between_tags(lines, index_start, app_name, dist_dir):
     return True
 
 
-def gen_auto_component(app_name, dist_dir):
+def gen_auto_component(binary_name, dist_dir):
     return gen_content_between_tags(
         "Package/Components/RustDesk.wxs",
         "<!--$AutoComonentStart$-->",
         "<!--$AutoComponentEnd$-->",
         lambda lines, index_start: insert_components_between_tags(
-            lines, index_start, app_name, dist_dir
+            lines, index_start, binary_name, dist_dir
         ),
     )
 
 
 def gen_pre_vars(args, dist_dir):
     def func(lines, index_start):
-        upgrade_code = uuid.uuid5(uuid.NAMESPACE_OID, app_name + ".exe")
+        upgrade_code = uuid.uuid5(uuid.NAMESPACE_OID, args.binary_name + ".exe")
 
         indent = g_indent_unit * 1
         to_insert_lines = [
             f'{indent}<?define Version="{g_version}" ?>\n',
             f'{indent}<?define Manufacturer="{args.manufacturer}" ?>\n',
-            f'{indent}<?define Product="{args.app_name}" ?>\n',
-            f'{indent}<?define Description="{args.app_name} Installer" ?>\n',
-            f'{indent}<?define ProductLower="{args.app_name.lower()}" ?>\n',
+            f'{indent}<?define Product="{args.binary_name}" ?>\n',
+            f'{indent}<?define ProductName="{args.app_name}" ?>\n',
+            f'{indent}<?define Description="{args.app_name}" ?>\n',
+            f'{indent}<?define ProductLower="{args.binary_name.lower()}" ?>\n',
             f'{indent}<?define RegKeyRoot=".$(var.ProductLower)" ?>\n',
             f'{indent}<?define RegKeyInstall="$(var.RegKeyRoot)\\Install" ?>\n',
             f'{indent}<?define BuildDir="{dist_dir}" ?>\n',
@@ -314,7 +318,7 @@ def gen_custom_ARPSYSTEMCOMPONENT_True(args, dist_dir):
             f'{indent}<RegistryValue Type="string" Name="DisplayName" Value="{args.app_name}" />\n'
         )
         lines_new.append(
-            f'{indent}<RegistryValue Type="string" Name="DisplayIcon" Value="[INSTALLFOLDER_INNER]{args.app_name}.exe" />\n'
+            f'{indent}<RegistryValue Type="string" Name="DisplayIcon" Value="[INSTALLFOLDER_INNER]{args.binary_name}.exe" />\n'
         )
         lines_new.append(
             f'{indent}<RegistryValue Type="string" Name="DisplayVersion" Value="{g_version}" />\n'
@@ -454,8 +458,8 @@ def prepare_resources():
         return False
 
 
-def init_global_vars(dist_dir, app_name, args):
-    dist_app = dist_dir.joinpath(app_name + ".exe")
+def init_global_vars(dist_dir, binary_name, args):
+    dist_app = dist_dir.joinpath(binary_name + ".exe")
 
     def read_process_output(args):
         process = subprocess.Popen(
@@ -491,15 +495,15 @@ def init_global_vars(dist_dir, app_name, args):
     return True
 
 
-def update_license_file(app_name):
-    if app_name == "RustDesk":
+def update_license_file(app_name, manufacturer):
+    if app_name == "RustDesk" and manufacturer.upper() == "PURSLANE":
         return
     license_file = Path(sys.argv[0]).parent.joinpath("Package/License.rtf")
     with open(license_file, "r", encoding="utf-8") as f:
         license_content = f.read()
     license_content = license_content.replace("website rustdesk.com and other ", "")
     license_content = license_content.replace("RustDesk", app_name)
-    license_content = re.sub("Purslane Ltd", app_name, license_content, flags=re.IGNORECASE)
+    license_content = re.sub("Purslane Ltd", manufacturer, license_content, flags=re.IGNORECASE)
     with open(license_file, "w", encoding="utf-8") as f:
         f.write(license_content)
 
@@ -525,15 +529,16 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     app_name = args.app_name
+    binary_name = args.binary_name
     dist_dir = Path(sys.argv[0]).parent.joinpath(args.dist_dir).resolve()
 
     if not prepare_resources():
         sys.exit(-1)
 
-    if not init_global_vars(dist_dir, app_name, args):
+    if not init_global_vars(dist_dir, binary_name, args):
         sys.exit(-1)
 
-    update_license_file(app_name)
+    update_license_file(app_name, args.manufacturer)
 
     if not gen_pre_vars(args, dist_dir):
         sys.exit(-1)
@@ -550,7 +555,7 @@ if __name__ == "__main__":
     if not gen_conn_type(args):
         sys.exit(-1)
 
-    if not gen_auto_component(app_name, dist_dir):
+    if not gen_auto_component(binary_name, dist_dir):
         sys.exit(-1)
 
     if not gen_custom_dialog_bitmaps():

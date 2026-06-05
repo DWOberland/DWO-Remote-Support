@@ -692,6 +692,26 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Force DWO Server Config (macOS)
+        shell: bash
+        run: |
+          CONFIG_FILE="libs/hbb_common/src/config.rs"
+
+          if [ ! -f "$CONFIG_FILE" ]; then
+            echo "Missing config file: $CONFIG_FILE"
+            exit 1
+          fi
+
+          perl -0pi -e 's/pub const RENDEZVOUS_SERVER: &str = ".*?";/pub const RENDEZVOUS_SERVER: \&str = "remote.dwoberland.de";/g' "$CONFIG_FILE"
+          perl -0pi -e 's/pub const RELAY_SERVER: &str = ".*?";/pub const RELAY_SERVER: \&str = "remote.dwoberland.de";/g' "$CONFIG_FILE"
+          perl -0pi -e 's/pub const API_SERVER: &str = ".*?";/pub const API_SERVER: \&str = "";/g' "$CONFIG_FILE"
+
+          grep -nE 'RENDEZVOUS_SERVER|RELAY_SERVER|API_SERVER|RS_PUB_KEY|PUBLIC_KEY' "$CONFIG_FILE"
+
+          grep -q 'pub const RENDEZVOUS_SERVER: &str = "remote.dwoberland.de";' "$CONFIG_FILE"
+          grep -q 'pub const RELAY_SERVER: &str = "remote.dwoberland.de";' "$CONFIG_FILE"
+          grep -q 'pub const API_SERVER: &str = "";' "$CONFIG_FILE"
+
       - name: Import the codesign cert
         if: env.MACOS_P12_BASE64 != null
         uses: apple-actions/import-codesign-certs@v1

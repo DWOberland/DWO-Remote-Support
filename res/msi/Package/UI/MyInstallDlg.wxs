@@ -66,12 +66,12 @@ Patch dialog sequence:
 
             <Publish Dialog="MyInstallDirDlg" Control="Back" Event="NewDialog" Value="LicenseAgreementDlg" />
             <!-- Normalize INSTALLFOLDER_INNER before SetTargetPath and WixUIValidatePath run. -->
-            <!-- UI case 1: already ends with \$(var.Product) but has no trailing slash, add the slash. -->
-            <Publish Dialog="MyInstallDirDlg" Control="Next" Property="INSTALLFOLDER_INNER" Value="[INSTALLFOLDER_INNER]\" Order="1" Condition="INSTALLFOLDER_INNER AND INSTALLFOLDER_INNER ~&gt;&gt; &quot;\$(var.Product)&quot;" />
-            <!-- UI case 2: ends with a slash but not \$(var.Product)\, append $(var.Product)\. -->
-            <Publish Dialog="MyInstallDirDlg" Control="Next" Property="INSTALLFOLDER_INNER" Value="[INSTALLFOLDER_INNER]$(var.Product)\" Order="2" Condition="INSTALLFOLDER_INNER AND INSTALLFOLDER_INNER ~&gt;&gt; &quot;\&quot; AND NOT (INSTALLFOLDER_INNER ~&gt;&gt; &quot;\$(var.Product)\&quot; OR INSTALLFOLDER_INNER ~&gt;&gt; &quot;\$(var.Product)&quot;)" />
-            <!-- UI case 3: has no trailing slash and does not end with \$(var.Product), append \$(var.Product)\. -->
-            <Publish Dialog="MyInstallDirDlg" Control="Next" Property="INSTALLFOLDER_INNER" Value="[INSTALLFOLDER_INNER]\$(var.Product)\" Order="3" Condition="INSTALLFOLDER_INNER AND NOT INSTALLFOLDER_INNER ~&gt;&gt; &quot;\&quot; AND NOT (INSTALLFOLDER_INNER ~&gt;&gt; &quot;\$(var.Product)\&quot; OR INSTALLFOLDER_INNER ~&gt;&gt; &quot;\$(var.Product)&quot;)" />
+            <!-- UI case 1: already ends with \$(var.ProductName) but has no trailing slash, add the slash. -->
+            <Publish Dialog="MyInstallDirDlg" Control="Next" Property="INSTALLFOLDER_INNER" Value="[INSTALLFOLDER_INNER]\" Order="1" Condition="INSTALLFOLDER_INNER AND INSTALLFOLDER_INNER ~&gt;&gt; &quot;\$(var.ProductName)&quot;" />
+            <!-- UI case 2: ends with a slash but not \$(var.ProductName)\, append $(var.ProductName)\. -->
+            <Publish Dialog="MyInstallDirDlg" Control="Next" Property="INSTALLFOLDER_INNER" Value="[INSTALLFOLDER_INNER]$(var.ProductName)\" Order="2" Condition="INSTALLFOLDER_INNER AND INSTALLFOLDER_INNER ~&gt;&gt; &quot;\&quot; AND NOT (INSTALLFOLDER_INNER ~&gt;&gt; &quot;\$(var.ProductName)\&quot; OR INSTALLFOLDER_INNER ~&gt;&gt; &quot;\$(var.ProductName)&quot;)" />
+            <!-- UI case 3: has no trailing slash and does not end with \$(var.ProductName), append \$(var.ProductName)\. -->
+            <Publish Dialog="MyInstallDirDlg" Control="Next" Property="INSTALLFOLDER_INNER" Value="[INSTALLFOLDER_INNER]\$(var.ProductName)\" Order="3" Condition="INSTALLFOLDER_INNER AND NOT INSTALLFOLDER_INNER ~&gt;&gt; &quot;\&quot; AND NOT (INSTALLFOLDER_INNER ~&gt;&gt; &quot;\$(var.ProductName)\&quot; OR INSTALLFOLDER_INNER ~&gt;&gt; &quot;\$(var.ProductName)&quot;)" />
             <Publish Dialog="MyInstallDirDlg" Control="Next" Event="SetTargetPath" Value="[WIXUI_INSTALLDIR]" Order="4" />
             <Publish Dialog="MyInstallDirDlg" Control="Next" Event="SpawnDialog" Value="InvalidDirDlg" Order="6" Condition="NOT WIXUI_DONTVALIDATEPATH AND WIXUI_INSTALLDIR_VALID&lt;&gt;&quot;1&quot;" />
             <Publish Dialog="MyInstallDirDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg" Order="7" Condition="WIXUI_DONTVALIDATEPATH OR WIXUI_INSTALLDIR_VALID=&quot;1&quot;" />

@@ -10,13 +10,13 @@ This file contains the declaration of all the localizable strings.
 	<!-- General strings -->
 	<String Id="DowngradeError" Value="A newer version of [ProductName] is already installed." />
 
-	<String Id="AR_Comment" Value="RustDesk" />
+	<String Id="AR_Comment" Value="DWO Remote Client" />
 
-	<String Id="F_App" Value="RustDesk" />
-	<String Id="F_App_Desc" Value="RustDesk - Main programs installations." />
+	<String Id="F_App" Value="DWO Remote Client" />
+	<String Id="F_App_Desc" Value="DWO Remote Client - Main program installation." />
 
-	<String Id="SC_Uninstall" Value="Uninstall RustDesk" />
-	<String Id="SC_Uninstall_Desc" Value="Removes RustDesk or parts of it from the computer" />
+	<String Id="SC_Uninstall" Value="Uninstall DWO Remote Client" />
+	<String Id="SC_Uninstall_Desc" Value="Removes DWO Remote Client or parts of it from the computer." />
 
 	<!-- Client related strings -->
 	<String Id="F_Client" Value="Client" />
@@ -26,20 +26,20 @@ This file contains the declaration of all the localizable strings.
 	<String Id="F_LAVFilters" Value="LAV Filters" />
 	<String Id="F_LAVFilters_Desc" Value="Recommended directshow filters for best audio and video playback experience." />
 
-	<String Id="SC_Client" Value="RustDesk" />
-	<String Id="SC_Client_Desc" Value="Start RustDesk." />
+	<String Id="SC_Client" Value="DWO Remote Client" />
+	<String Id="SC_Client_Desc" Value="Start DWO Remote Client." />
 
-	<String Id="SC_Client_Tray" Value="RustDesk Tray" />
-	<String Id="SC_Client_Tray_Desc" Value="Start RustDesk tray." />
+	<String Id="SC_Client_Tray" Value="DWO Remote Client Tray" />
+	<String Id="SC_Client_Tray_Desc" Value="Start the DWO Remote Client tray." />
 
 	<!-- Server related strings -->
 	<String Id="F_Server" Value="Server" />
-	<String Id="F_Server_Desc" Value="The server part of RustDesk. Provides the MediaLibrary and other services." />
+	<String Id="F_Server_Desc" Value="The service part of DWO Remote Client. Provides the media library and related services." />
 	<String Id="F_Server_Plugins" Value="Plugins" />
 	<String Id="F_Server_Plugins_Desc" Value="Plugins for the server." />
 
-	<String Id="Service_DisplayName" Value="RustDesk Service" />
-	<String Id="Service_Description" Value="This service runs the RustDesk Server." />
+	<String Id="Service_DisplayName" Value="DWO Remote Client Service" />
+	<String Id="Service_Description" Value="This service runs the DWO Remote Client." />
 
 	<!-- Launch Conditions -->
 	<String Id="LC_OS" Value="[ProductName] requires minimum Windows 7 / 2008 R2 as operating system." />
@@ -49,8 +49,11 @@ This file contains the declaration of all the localizable strings.
 	<String Id="AnotherAppDialogTitle" Value="Cancel installation."/>
 	<String Id="AnotherAppDialogDescription" Value="The application is installed by self-installation method, please uninstall it first."/>
 
+	<String Id="WelcomeDlgTitle" Value="Welcome to the [ProductName] Setup Wizard" />
+	<String Id="WelcomeDlgDescription" Value="The Setup Wizard will install [ProductName] on your computer. Click Next to continue or Cancel to exit the Setup Wizard." />
+
 	<String Id="MyInstallDirDlgDesktopShortcuts" Value="Create desktop icon" />
 	<String Id="MyInstallDirDlgStartMenuShortcuts" Value="Create start menu shortcuts" />
-	<String Id="MyInstallDirDlgPrinter" Value="Install RustDesk Printer" />
+	<String Id="MyInstallDirDlgPrinter" Value="Install DWO Remote Client Printer" />
 
 </WixLocalization>

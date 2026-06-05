@@ -816,8 +816,14 @@ jobs:
       - name: Setup vcpkg with Github Actions binary cache
         uses: lukka/run-vcpkg@v11
         with:
+          vcpkgDirectory: ${{ runner.temp }}/vcpkg
           vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
           doNotCache: false
+
+      - name: Show vcpkg path
+        run: |
+          echo "VCPKG_ROOT=$VCPKG_ROOT"
+          ls -la "$VCPKG_ROOT" || true
 
       - name: Install vcpkg dependencies
         run: |

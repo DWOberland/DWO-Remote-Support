@@ -226,12 +226,24 @@ jobs:
           Test-Path (Join-Path $sourceResourcesDir "app_icon.ico")
           Test-Path (Join-Path $buildResourcesDir "app_icon.ico")
 
-          Write-Host "=== Runner.rc icon line ==="
+          Write-Host "=== Runner.rc icon line before patch ==="
           Select-String -Path (Join-Path $runnerDir "Runner.rc") -Pattern "IDI_APP_ICON|app_icon"
+
+          Write-Host "=== Patch Runner.rc icon path to absolute path ==="
+
+          $runnerRc = Join-Path $runnerDir "Runner.rc"
+          $absoluteIconPath = [System.IO.Path]::GetFullPath((Join-Path $sourceResourcesDir "app_icon.ico"))
+          $escapedIconPath = $absoluteIconPath.Replace("\", "\\")
+
+          $runnerRcContent = Get-Content $runnerRc -Raw
+          $runnerRcContent = $runnerRcContent -replace 'IDI_APP_ICON\s+ICON\s+"resources\\\\app_icon\.ico"', "IDI_APP_ICON            ICON                    `"$escapedIconPath`""
+          Set-Content -Path $runnerRc -Value $runnerRcContent -Encoding UTF8
+
+          Write-Host "=== Runner.rc icon line after patch ==="
+          Select-String -Path $runnerRc -Pattern "IDI_APP_ICON|app_icon"
 
           Write-Host "=== Build rustdesk ==="
           python3 build.py --portable --hwcodec --flutter --vram --skip-portable-pack
-
           Write-Host "=== Move Release to rustdesk folder ==="
           if (Test-Path -Path "./flutter/build/windows/x64/runner/Release") {
             if (Test-Path -Path "./rustdesk") {

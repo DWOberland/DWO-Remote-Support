@@ -130,6 +130,32 @@ jobs:
           Write-Host "=== DWO server config after patch ==="
           Select-String -Path $configFile -Pattern "RENDEZVOUS_SERVERS|RENDEZVOUS_SERVER|RELAY_SERVER|API_SERVER|RS_PUB_KEY"
 
+      - name: Disable Internal Installer & Fix Install Path (Windows)
+        shell: pwsh
+        run: |
+          Write-Host "=== Hiding Install Button ==="
+          # Ersetzt das InstallWidget() im gesamten Flutter-UI durch ein unsichtbares Element
+          Get-ChildItem -Path "flutter/lib" -Filter "*.dart" -Recurse | ForEach-Object {
+            $content = Get-Content $_.FullName -Raw
+            if ($content -match 'InstallWidget\([^)]*\)') {
+              $content = $content -replace 'InstallWidget\([^)]*\)', 'SizedBox.shrink()'
+              Set-Content $_.FullName $content -Encoding UTF8
+              Write-Host "Disabled InstallWidget in $($_.FullName)"
+            }
+          }
+
+          Write-Host "=== Patching is_installed() path ==="
+          # Bringt der Logik bei, dass "DWO Remote Support" der korrekte Installationspfad ist
+          Get-ChildItem -Path "src" -Filter "windows.rs" -Recurse | ForEach-Object {
+            $content = Get-Content $_.FullName -Raw
+            if ($content -match 'program files\\\\rustdesk') {
+              $content = $content -replace 'program files\\\\rustdesk', 'program files\\dwo remote support'
+              $content = $content -replace 'program files \\(x86\\)\\\\rustdesk', 'program files (x86)\\dwo remote support'
+              Set-Content $_.FullName $content -Encoding UTF8
+              Write-Host "Patched install path check in $($_.FullName)"
+            }
+          }
+
       - name: Restore bridge files
         uses: actions/download-artifact@master
         with:

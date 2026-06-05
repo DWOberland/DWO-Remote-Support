@@ -136,9 +136,12 @@ jobs:
           Write-Host "=== Hiding Install Button ==="
           # Ersetzt das InstallWidget() im gesamten Flutter-UI durch ein unsichtbares Element
           Get-ChildItem -Path "flutter/lib" -Filter "*.dart" -Recurse | ForEach-Object {
-            $content = Get-Content $_.FullName -Raw
-            if ($content -match 'InstallWidget\([^)]*\)') {
-              $content = $content -replace 'InstallWidget\([^)]*\)', 'SizedBox.shrink()'
+            $original = Get-Content $_.FullName -Raw
+            $content = $original
+            $content = $content -replace 'InstallWidget\([^)]*\)', 'SizedBox.shrink()'
+            $content = $content -replace 'bind\.mainIsInstalled\(\)', 'true'
+            $content = $content -replace 'bind\.mainIsInstalledLowerVersion\(\)', 'false'
+            if ($original -ne $content) {
               Set-Content $_.FullName $content -Encoding UTF8
               Write-Host "Disabled InstallWidget in $($_.FullName)"
             }
@@ -146,7 +149,7 @@ jobs:
 
           Write-Host "=== Patching is_installed() path ==="
           # Bringt der Logik bei, dass "DWO Remote Support" der korrekte Installationspfad ist
-          Get-ChildItem -Path "src" -Filter "windows.rs" -Recurse | ForEach-Object {
+          Get-ChildItem -Path "." -Filter "windows.rs" -Recurse | ForEach-Object {
             $content = Get-Content $_.FullName -Raw
             if ($content -match 'program files\\\\rustdesk') {
               $content = $content -replace 'program files\\\\rustdesk', 'program files\\dwo remote support'

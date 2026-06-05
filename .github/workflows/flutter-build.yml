@@ -702,15 +702,26 @@ jobs:
             exit 1
           fi
 
-          perl -0pi -e 's/pub const RENDEZVOUS_SERVER: &str = ".*?";/pub const RENDEZVOUS_SERVER: \&str = "remote.dwoberland.de";/g' "$CONFIG_FILE"
-          perl -0pi -e 's/pub const RELAY_SERVER: &str = ".*?";/pub const RELAY_SERVER: \&str = "remote.dwoberland.de";/g' "$CONFIG_FILE"
-          perl -0pi -e 's/pub const API_SERVER: &str = ".*?";/pub const API_SERVER: \&str = "";/g' "$CONFIG_FILE"
+          echo "=== Before patch ==="
+          grep -nE 'RENDEZVOUS_SERVER|RENDEZVOUS_SERVERS|API_SERVER|RS_PUB_KEY|rustdesk.com' "$CONFIG_FILE" || true
 
-          grep -nE 'RENDEZVOUS_SERVER|RELAY_SERVER|API_SERVER|RS_PUB_KEY|PUBLIC_KEY' "$CONFIG_FILE"
+          echo "=== Patch macOS DWO server config ==="
+          perl -0pi -e 's#pub const RENDEZVOUS_SERVERS:\s*&\[\&str\]\s*=\s*&\[[^\]]*\];#pub const RENDEZVOUS_SERVERS: &[&str] = &["remote.dwoberland.de"];#g' "$CONFIG_FILE"
+          perl -0pi -e 's#pub const API_SERVER:\s*&str\s*=\s*".*?";#pub const API_SERVER: \&str = "";#g' "$CONFIG_FILE"
 
-          grep -q 'pub const RENDEZVOUS_SERVER: &str = "remote.dwoberland.de";' "$CONFIG_FILE"
-          grep -q 'pub const RELAY_SERVER: &str = "remote.dwoberland.de";' "$CONFIG_FILE"
-          grep -q 'pub const API_SERVER: &str = "";' "$CONFIG_FILE"
+          echo "=== After patch ==="
+          grep -nE 'RENDEZVOUS_SERVER|RENDEZVOUS_SERVERS|API_SERVER|RS_PUB_KEY|rustdesk.com' "$CONFIG_FILE" || true
+
+          echo "=== Validate config ==="
+          grep -q 'pub const RENDEZVOUS_SERVERS: &\[&str\] = &\["remote.dwoberland.de"\];' "$CONFIG_FILE" || {
+            echo "RENDEZVOUS_SERVERS was not patched correctly"
+            exit 1
+          }
+
+          if grep -q 'rs-ny.rustdesk.com\|rs-sg.rustdesk.com\|rs-cn.rustdesk.com' "$CONFIG_FILE"; then
+            echo "Public RustDesk rendezvous server still found"
+            exit 1
+          fi
 
       - name: Import the codesign cert
         if: env.MACOS_P12_BASE64 != null

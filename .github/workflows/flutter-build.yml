@@ -174,49 +174,70 @@ jobs:
           head -n 100 "${VCPKG_ROOT}/buildtrees/ffmpeg/build-${{ matrix.job.vcpkg-triplet }}-rel-out.log" || true
         shell: bash
 
-      - name: Fix Windows icon location
+      - name: Build rustdesk
         shell: pwsh
         run: |
-          $runnerDir = Join-Path $env:GITHUB_WORKSPACE "flutter/windows/runner"
-          $sourceIcon = Join-Path $runnerDir "resources/app_icon.ico"
-          $targetIcon = Join-Path $runnerDir "app_icon.ico"
-          $runnerRc = Join-Path $runnerDir "Runner.rc"
+          Write-Host "=== Fix app icon before build ==="
 
-          Write-Host "=== Check source icon ==="
-          if (!(Test-Path $sourceIcon)) {
-            Write-Error "Source icon not found: $sourceIcon"
+          $workspace = $env:GITHUB_WORKSPACE
+          $runnerDir = Join-Path $workspace "flutter/windows/runner"
+          $sourceIcon1 = Join-Path $runnerDir "resources/app_icon.ico"
+          $sourceIcon2 = Join-Path $runnerDir "app_icon.ico"
+
+          Write-Host "Runner dir: $runnerDir"
+          Write-Host "Check resources icon: $sourceIcon1"
+          Write-Host "Check root icon: $sourceIcon2"
+
+          if (Test-Path $sourceIcon1) {
+            $iconSource = $sourceIcon1
+          } elseif (Test-Path $sourceIcon2) {
+            $iconSource = $sourceIcon2
+          } else {
+            Write-Error "No app_icon.ico found in flutter/windows/runner/resources or flutter/windows/runner"
+            Get-ChildItem $runnerDir -Recurse | Select-Object FullName,Length
             exit 1
           }
 
-          Copy-Item $sourceIcon $targetIcon -Force
-
-          Write-Host "=== Check target icon ==="
-          if (!(Test-Path $targetIcon)) {
-            Write-Error "Target icon not created: $targetIcon"
-            exit 1
-          }
-
-          $bytes = Get-Content $targetIcon -Encoding Byte -TotalCount 4
+          $bytes = Get-Content $iconSource -Encoding Byte -TotalCount 4
           Write-Host "ICO header bytes: $($bytes -join ',')"
 
           if (!($bytes[0] -eq 0 -and $bytes[1] -eq 0 -and $bytes[2] -eq 1 -and $bytes[3] -eq 0)) {
-            Write-Error "app_icon.ico is not a valid ICO file. Expected header: 0,0,1,0"
+            Write-Error "Icon file is not a valid ICO file. Expected ICO header: 0,0,1,0"
             exit 1
           }
 
-          Write-Host "=== Patch Runner.rc ==="
-          $content = Get-Content $runnerRc -Raw
-          $content = $content -replace 'ICON\s+"resources\\\\app_icon\.ico"', 'ICON                    "app_icon.ico"'
-          Set-Content $runnerRc $content -Encoding UTF8
+          # Sicherstellen, dass die Original-Struktur existiert
+          $sourceResourcesDir = Join-Path $runnerDir "resources"
+          New-Item -ItemType Directory -Force -Path $sourceResourcesDir | Out-Null
+          Copy-Item $iconSource (Join-Path $sourceResourcesDir "app_icon.ico") -Force
 
-          Write-Host "=== Runner.rc after patch ==="
-          Select-String -Path $runnerRc -Pattern "IDI_APP_ICON|app_icon"
+          # Wichtig: Build-Verzeichnis vorbereiten, weil RC2135 aus dem Build-Projekt kommt
+          $buildRunnerDir = Join-Path $workspace "flutter/build/windows/x64/runner"
+          $buildResourcesDir = Join-Path $buildRunnerDir "resources"
+          New-Item -ItemType Directory -Force -Path $buildResourcesDir | Out-Null
+          Copy-Item $iconSource (Join-Path $buildResourcesDir "app_icon.ico") -Force
 
-          Write-Host "=== Runner directory files ==="
-          Get-ChildItem $runnerDir | Select-Object Name,Length
+          Write-Host "=== Final icon checks ==="
+          Test-Path (Join-Path $sourceResourcesDir "app_icon.ico")
+          Test-Path (Join-Path $buildResourcesDir "app_icon.ico")
 
-      - name: Build rustdesk
-        run: |
+          Write-Host "=== Runner.rc icon line ==="
+          Select-String -Path (Join-Path $runnerDir "Runner.rc") -Pattern "IDI_APP_ICON|app_icon"
+
+          Write-Host "=== Build rustdesk ==="
+          python3 build.py --portable --hwcodec --flutter --vram --skip-portable-pack
+
+          if (Test-Path -Path "./flutter/build/windows/x64/runner/Release") {
+              Move-Item -Path "./flutter/build/windows/x64/runner/Release" -Destination "./rustdesk" -Force
+          } else {
+              Write-Host "Release-Ordner nicht gefunden - ueberspringe Verschieben"
+          }
+
+          Invoke-WebRequest -Uri https://github.com/rustdesk-org/rdev/releases/download/usbmmidd_v2/usbmmidd_v2.zip -OutFile usbmmidd_v2.zip
+          Expand-Archive usbmmidd_v2.zip -DestinationPath .
+          Remove-Item -Path usbmmidd_v2\Win32 -Recurse
+          Remove-Item -Path "usbmmidd_v2\deviceinstaller64.exe", "usbmmidd_v2\deviceinstaller.exe", "usbmmidd_v2\usbmmidd.bat"
+          Move-Item -Force .\usbmmidd_v2 ./rustdesk
           # Windows: build RustDesk
           python3 build.py --portable --hwcodec --flutter --vram --skip-portable-pack
           

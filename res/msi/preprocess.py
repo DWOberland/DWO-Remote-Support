@@ -73,7 +73,7 @@ def make_parser():
         help='Connection type, e.g. "incoming", "outgoing". Default is empty, means incoming-outgoing',
     )
     parser.add_argument(
-        "--app-name", type=str, default="DWO Remote Client", help="The displayed app name."
+        "--app-name", type=str, default="DWO Remote Support", help="The displayed app name."
     )
     parser.add_argument(
         "--binary-name", type=str, default="rustdesk", help="The installed executable name without extension."
@@ -496,16 +496,24 @@ def init_global_vars(dist_dir, binary_name, args):
 
 
 def update_license_file(app_name, manufacturer):
-    if app_name == "RustDesk" and manufacturer.upper() == "PURSLANE":
-        return
     license_file = Path(sys.argv[0]).parent.joinpath("Package/License.rtf")
-    with open(license_file, "r", encoding="utf-8") as f:
-        license_content = f.read()
-    license_content = license_content.replace("website rustdesk.com and other ", "")
-    license_content = license_content.replace("RustDesk", app_name)
-    license_content = re.sub("Purslane Ltd", manufacturer, license_content, flags=re.IGNORECASE)
+
+    rtf_content = r"""{\rtf1\ansi\ansicpg1252\deff0\nouicompat\deflang1031{\fonttbl{\f0\fnil\fcharset0 Calibri;}}
+{\*\generator Riched20 10.0.19041}\viewkind4\uc1
+\pard\sa200\sl276\b\f0\fs28 Nutzungsbedingungen & Datenschutz\par
+\b0\fs22\par
+1. Der DWO Remote Support Client dient ausschlie\'dflich zur Fernwartung und technischen Unterst\'fctzung.\par
+2. Eine Verbindung erfolgt nur mit Zustimmung des Nutzers durch Weitergabe von ID und Einmalpasswort.\par
+3. W\'e4hrend der Fernwartung k\'f6nnen Bildschirminhalte sichtbar werden.\par
+4. Vertrauliche Dokumente/Programme sollen vor Beginn geschlossen werden.\par
+5. Personenbezogene Daten werden nach der Datenschutzerkl\'e4rung von Digitalwerk Oberland verarbeitet.\par
+6. Erg\'e4nzende Regelungen ergeben sich aus Datenschutz, AVV, Supportbedingungen und SLA.\par
+7. Heimliche \'dcberwachung oder unbefugte Nutzung ist untersagt.\par
+8. Mit der Installation best\'e4tigt der Nutzer die zweckgebundene Verwendung.\par
+}
+"""
     with open(license_file, "w", encoding="utf-8") as f:
-        f.write(license_content)
+        f.write(rtf_content)
 
 
 def replace_component_guids_in_wxs():

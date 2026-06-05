@@ -180,67 +180,85 @@ jobs:
           Write-Host "=== Fix app icon before build ==="
 
           $workspace = $env:GITHUB_WORKSPACE
+          if ([string]::IsNullOrWhiteSpace($workspace)) {
+            $workspace = (Get-Location).Path
+          }
+
           $runnerDir = Join-Path $workspace "flutter/windows/runner"
-          $sourceIcon1 = Join-Path $runnerDir "resources/app_icon.ico"
-          $sourceIcon2 = Join-Path $runnerDir "app_icon.ico"
+          $resourcesDir = Join-Path $runnerDir "resources"
+          $targetIcon = Join-Path $resourcesDir "app_icon.ico"
+          $fallbackIcon = Join-Path $runnerDir "app_icon.ico"
 
           Write-Host "Runner dir: $runnerDir"
-          Write-Host "Check resources icon: $sourceIcon1"
-          Write-Host "Check root icon: $sourceIcon2"
+          Write-Host "Resources icon: $targetIcon"
+          Write-Host "Fallback icon: $fallbackIcon"
 
-          if (Test-Path $sourceIcon1) {
-          $iconSource = $sourceIcon1
-          } elseif (Test-Path $sourceIcon2) {
-          $iconSource = $sourceIcon2
+          if (Test-Path -LiteralPath $targetIcon -PathType Leaf) {
+            $iconSource = $targetIcon
+          } elseif (Test-Path -LiteralPath $fallbackIcon -PathType Leaf) {
+            $iconSource = $fallbackIcon
           } else {
-          Write-Error "No app_icon.ico found in flutter/windows/runner/resources or flutter/windows/runner"
-          Get-ChildItem $runnerDir -Recurse | Select-Object FullName,Length
-          exit 1
+            Write-Error "No app_icon.ico found in flutter/windows/runner/resources or flutter/windows/runner"
+            if (Test-Path -LiteralPath $runnerDir) {
+              Get-ChildItem -LiteralPath $runnerDir -Recurse | Select-Object FullName, Length
+            }
+            exit 1
           }
 
-          $bytes = [System.IO.File]::ReadAllBytes($iconSource)[0..3]
-          Write-Host "ICO header bytes: $($bytes -join ',')"
-
-          if (!($bytes[0] -eq 0 -and $bytes[1] -eq 0 -and $bytes[2] -eq 1 -and $bytes[3] -eq 0)) {
-          Write-Error "Icon file is not a valid ICO file. Expected ICO header: 0,0,1,0"
-          exit 1
+          $iconBytes = [System.IO.File]::ReadAllBytes($iconSource)
+          if ($iconBytes.Length -lt 4) {
+            Write-Error "Icon file is too small to be a valid ICO file: $iconSource"
+            exit 1
           }
 
-          $sourceResourcesDir = Join-Path $runnerDir "resources"
-          New-Item -ItemType Directory -Force -Path $sourceResourcesDir | Out-Null
+          $header = $iconBytes[0..3]
+          Write-Host "ICO header bytes: $($header -join ',')"
 
-          $sourceTargetIcon = Join-Path $sourceResourcesDir "app_icon.ico"
+          if (-not ($header[0] -eq 0 -and $header[1] -eq 0 -and $header[2] -eq 1 -and $header[3] -eq 0)) {
+            Write-Error "Icon file is not a valid ICO file. Expected ICO header: 0,0,1,0"
+            exit 1
+          }
 
-          if ([System.IO.Path]::GetFullPath($iconSource) -ne [System.IO.Path]::GetFullPath($sourceTargetIcon)) {
-          Copy-Item $iconSource $sourceTargetIcon -Force
+          New-Item -ItemType Directory -Force -Path $resourcesDir | Out-Null
+
+          $sourceFullPath = [System.IO.Path]::GetFullPath($iconSource)
+          $targetFullPath = [System.IO.Path]::GetFullPath($targetIcon)
+
+          if (-not [string]::Equals($sourceFullPath, $targetFullPath, [System.StringComparison]::OrdinalIgnoreCase)) {
+            Copy-Item -LiteralPath $iconSource -Destination $targetIcon -Force
+            Write-Host "Copied app icon into resources: $targetIcon"
           } else {
-          Write-Host "Source icon is already in resources folder, skipping self-copy."
+            Write-Host "Icon already exists in resources; skipping copy."
           }
 
-          $buildRunnerDir = Join-Path $workspace "flutter/build/windows/x64/runner"
-          $buildResourcesDir = Join-Path $buildRunnerDir "resources"
-          New-Item -ItemType Directory -Force -Path $buildResourcesDir | Out-Null
-          Copy-Item $iconSource (Join-Path $buildResourcesDir "app_icon.ico") -Force
-      
-          Write-Host "=== Final icon checks ==="
-          Test-Path (Join-Path $sourceResourcesDir "app_icon.ico")
-          Test-Path (Join-Path $buildResourcesDir "app_icon.ico")
-
-          Write-Host "=== Runner.rc icon line before patch ==="
-          Select-String -Path (Join-Path $runnerDir "Runner.rc") -Pattern "IDI_APP_ICON|app_icon"
-
-          Write-Host "=== Patch Runner.rc icon path to absolute path ==="
+          $targetIconBytes = [System.IO.File]::ReadAllBytes($targetIcon)
+          if (
+            $targetIconBytes.Length -lt 4 -or
+            -not ($targetIconBytes[0] -eq 0 -and $targetIconBytes[1] -eq 0 -and $targetIconBytes[2] -eq 1 -and $targetIconBytes[3] -eq 0)
+          ) {
+            Write-Error "Prepared icon file is not a valid ICO file: $targetIcon"
+            exit 1
+          }
 
           $runnerRc = Join-Path $runnerDir "Runner.rc"
-          $absoluteIconPath = [System.IO.Path]::GetFullPath((Join-Path $sourceResourcesDir "app_icon.ico"))
-          $escapedIconPath = $absoluteIconPath.Replace("\", "\\")
+          if (Test-Path -LiteralPath $runnerRc -PathType Leaf) {
+            $runnerRcContent = Get-Content -LiteralPath $runnerRc -Raw
+            $updatedRunnerRcContent = $runnerRcContent -replace 'IDI_APP_ICON\s+ICON\s+"(?:resources(?:\\\\|\\))?app_icon\.ico"', 'IDI_APP_ICON            ICON                    "resources\\app_icon.ico"'
 
-          $runnerRcContent = Get-Content $runnerRc -Raw
-          $runnerRcContent = $runnerRcContent -replace 'IDI_APP_ICON\s+ICON\s+"resources\\\\app_icon\.ico"', "IDI_APP_ICON            ICON                    `"$escapedIconPath`""
-          Set-Content -Path $runnerRc -Value $runnerRcContent -Encoding UTF8
+            if ($updatedRunnerRcContent -ne $runnerRcContent) {
+              Set-Content -LiteralPath $runnerRc -Value $updatedRunnerRcContent -Encoding UTF8
+              Write-Host "Runner.rc icon path normalized to resources\\app_icon.ico"
+            } else {
+              Write-Host "Runner.rc icon path already valid."
+            }
 
-          Write-Host "=== Runner.rc icon line after patch ==="
-          Select-String -Path $runnerRc -Pattern "IDI_APP_ICON|app_icon"
+            Select-String -Path $runnerRc -Pattern "IDI_APP_ICON|app_icon"
+          } else {
+            Write-Error "Runner.rc not found: $runnerRc"
+            exit 1
+          }
+
+          Write-Host "Prepared app icon: $targetIcon"
 
           Write-Host "=== Build rustdesk ==="
           python3 build.py --portable --hwcodec --flutter --vram --skip-portable-pack
@@ -288,7 +306,7 @@ jobs:
           } catch {
             Write-Host "Ignore the printer driver error."
           }
-          
+
       - name: find Runner.res
         # Windows: find Runner.res (compiled from ./flutter/windows/runner/Runner.rc), copy to ./Runner.res
         # Runner.rc does not contain actual version, but Runner.res does

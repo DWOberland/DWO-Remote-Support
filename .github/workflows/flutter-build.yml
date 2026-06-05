@@ -174,13 +174,47 @@ jobs:
           head -n 100 "${VCPKG_ROOT}/buildtrees/ffmpeg/build-${{ matrix.job.vcpkg-triplet }}-rel-out.log" || true
         shell: bash
 
-      - name: Fix Windows Icon Path
-        shell: bash
+      - name: Fix Windows icon for Resource Compiler
+        shell: pwsh
         run: |
-          mkdir -p flutter/windows/runner/resources
-          cp flutter/windows/runner/resources/app_icon.ico flutter/windows/runner/resources/app_icon.ico || echo "Icon not found"
-          # Prüfen ob die Datei wirklich da ist, wo RC2135 sie sucht
-          ls -l flutter/windows/runner/resources/app_icon.ico
+          Write-Host "=== Check source icon ==="
+          $sourceIcon = Join-Path $env:GITHUB_WORKSPACE "flutter/windows/runner/resources/app_icon.ico"
+
+          if (!(Test-Path $sourceIcon)) {
+            Write-Error "Source icon not found: $sourceIcon"
+            exit 1
+          }
+
+          Get-Item $sourceIcon | Format-List FullName,Length
+
+          Write-Host "=== Check ICO header bytes ==="
+          $bytes = Get-Content $sourceIcon -Encoding Byte -TotalCount 4
+          Write-Host ($bytes -join ",")
+
+          if (!($bytes[0] -eq 0 -and $bytes[1] -eq 0 -and $bytes[2] -eq 1 -and $bytes[3] -eq 0)) {
+            Write-Error "app_icon.ico is not a valid ICO file. Expected header: 0,0,1,0"
+            exit 1
+          }
+
+          Write-Host "=== Patch Runner.rc to absolute icon path ==="
+          $runnerRc = Join-Path $env:GITHUB_WORKSPACE "flutter/windows/runner/Runner.rc"
+          $escapedIcon = $sourceIcon.Replace("\\", "\\")
+
+          (Get-Content $runnerRc) `
+            -replace 'IDI_APP_ICON\s+ICON\s+"resources\\\\app_icon\.ico"', "IDI_APP_ICON            ICON                    `"$escapedIcon`"" |
+            Set-Content $runnerRc -Encoding UTF8
+
+          Write-Host "=== Runner.rc icon line after patch ==="
+          Select-String -Path $runnerRc -Pattern "IDI_APP_ICON|app_icon"
+
+          Write-Host "=== Also prepare build runner resources folder ==="
+          $buildRes = Join-Path $env:GITHUB_WORKSPACE "flutter/build/windows/x64/runner/resources"
+          New-Item -ItemType Directory -Force -Path $buildRes | Out-Null
+          Copy-Item $sourceIcon (Join-Path $buildRes "app_icon.ico") -Force
+
+          Write-Host "=== Final file checks ==="
+          Test-Path $sourceIcon
+          Test-Path (Join-Path $buildRes "app_icon.ico")
 
       - name: Build rustdesk
         run: |

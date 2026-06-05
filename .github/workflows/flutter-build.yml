@@ -189,32 +189,39 @@ jobs:
           Write-Host "Check root icon: $sourceIcon2"
 
           if (Test-Path $sourceIcon1) {
-            $iconSource = $sourceIcon1
+          $iconSource = $sourceIcon1
           } elseif (Test-Path $sourceIcon2) {
-            $iconSource = $sourceIcon2
+          $iconSource = $sourceIcon2
           } else {
-            Write-Error "No app_icon.ico found in flutter/windows/runner/resources or flutter/windows/runner"
-            Get-ChildItem $runnerDir -Recurse | Select-Object FullName,Length
-            exit 1
+          Write-Error "No app_icon.ico found in flutter/windows/runner/resources or flutter/windows/runner"
+          Get-ChildItem $runnerDir -Recurse | Select-Object FullName,Length
+          exit 1
           }
 
           $bytes = [System.IO.File]::ReadAllBytes($iconSource)[0..3]
           Write-Host "ICO header bytes: $($bytes -join ',')"
 
           if (!($bytes[0] -eq 0 -and $bytes[1] -eq 0 -and $bytes[2] -eq 1 -and $bytes[3] -eq 0)) {
-            Write-Error "Icon file is not a valid ICO file. Expected ICO header: 0,0,1,0"
-            exit 1
+          Write-Error "Icon file is not a valid ICO file. Expected ICO header: 0,0,1,0"
+          exit 1
           }
 
           $sourceResourcesDir = Join-Path $runnerDir "resources"
           New-Item -ItemType Directory -Force -Path $sourceResourcesDir | Out-Null
-          Copy-Item $iconSource (Join-Path $sourceResourcesDir "app_icon.ico") -Force
+
+          $sourceTargetIcon = Join-Path $sourceResourcesDir "app_icon.ico"
+
+          if ([System.IO.Path]::GetFullPath($iconSource) -ne [System.IO.Path]::GetFullPath($sourceTargetIcon)) {
+          Copy-Item $iconSource $sourceTargetIcon -Force
+          } else {
+          Write-Host "Source icon is already in resources folder, skipping self-copy."
+          }
 
           $buildRunnerDir = Join-Path $workspace "flutter/build/windows/x64/runner"
           $buildResourcesDir = Join-Path $buildRunnerDir "resources"
           New-Item -ItemType Directory -Force -Path $buildResourcesDir | Out-Null
           Copy-Item $iconSource (Join-Path $buildResourcesDir "app_icon.ico") -Force
-
+      
           Write-Host "=== Final icon checks ==="
           Test-Path (Join-Path $sourceResourcesDir "app_icon.ico")
           Test-Path (Join-Path $buildResourcesDir "app_icon.ico")

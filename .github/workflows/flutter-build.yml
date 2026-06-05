@@ -103,6 +103,33 @@ jobs:
       - name: Force update hbb_common
         run: git submodule update --init --remote libs/hbb_common
 
+      - name: Force DWO Server Config (Windows)
+        shell: pwsh
+        run: |
+          $configFile = "libs/hbb_common/src/config.rs"
+
+          if (!(Test-Path $configFile)) {
+            Write-Error "Missing config file: $configFile"
+            exit 1
+          }
+
+          $content = Get-Content $configFile -Raw
+
+          # Setze DWO Rendezvous Serverliste
+          $content = $content -replace 'pub const RENDEZVOUS_SERVERS:\s*&\[\&str\]\s*=\s*&\[[^\]]*\];', 'pub const RENDEZVOUS_SERVERS: &[&str] = &["remote.dwoberland.de"];'
+
+          # Falls einzelne Server-Konstanten existieren, ebenfalls setzen
+          $content = $content -replace 'pub const RENDEZVOUS_SERVER:\s*&str\s*=\s*".*?";', 'pub const RENDEZVOUS_SERVER: &str = "remote.dwoberland.de";'
+          $content = $content -replace 'pub const RELAY_SERVER:\s*&str\s*=\s*".*?";', 'pub const RELAY_SERVER: &str = "remote.dwoberland.de";'
+
+          # Offizielle API deaktivieren
+          $content = $content -replace 'pub const API_SERVER:\s*&str\s*=\s*".*?";', 'pub const API_SERVER: &str = "";'
+
+          Set-Content $configFile $content -Encoding UTF8
+
+          Write-Host "=== DWO server config after patch ==="
+          Select-String -Path $configFile -Pattern "RENDEZVOUS_SERVERS|RENDEZVOUS_SERVER|RELAY_SERVER|API_SERVER|RS_PUB_KEY"
+
       - name: Restore bridge files
         uses: actions/download-artifact@master
         with:

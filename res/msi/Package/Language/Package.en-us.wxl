@@ -1,4 +1,4 @@
-﻿<!--
+<!--
 This file contains the declaration of all the localizable strings.
 -->
 <WixLocalization Culture="en-us" Codepage="1252"
@@ -10,13 +10,13 @@ This file contains the declaration of all the localizable strings.
 	<!-- General strings -->
 	<String Id="DowngradeError" Value="A newer version of [ProductName] is already installed." />
 
-	<String Id="AR_Comment" Value="DWO Remote Client" />
+	<String Id="AR_Comment" Value="DWO Remote Support" />
 
-	<String Id="F_App" Value="DWO Remote Client" />
-	<String Id="F_App_Desc" Value="DWO Remote Client - Main program installation." />
+	<String Id="F_App" Value="DWO Remote Support" />
+	<String Id="F_App_Desc" Value="DWO Remote Support - Main program installation." />
 
-	<String Id="SC_Uninstall" Value="Uninstall DWO Remote Client" />
-	<String Id="SC_Uninstall_Desc" Value="Removes DWO Remote Client or parts of it from the computer." />
+	<String Id="SC_Uninstall" Value="Uninstall DWO Remote Support" />
+	<String Id="SC_Uninstall_Desc" Value="Removes DWO Remote Support or parts of it from the computer." />
 
 	<!-- Client related strings -->
 	<String Id="F_Client" Value="Client" />
@@ -26,20 +26,20 @@ This file contains the declaration of all the localizable strings.
 	<String Id="F_LAVFilters" Value="LAV Filters" />
 	<String Id="F_LAVFilters_Desc" Value="Recommended directshow filters for best audio and video playback experience." />
 
-	<String Id="SC_Client" Value="DWO Remote Client" />
-	<String Id="SC_Client_Desc" Value="Start DWO Remote Client." />
+	<String Id="SC_Client" Value="DWO Remote Support" />
+	<String Id="SC_Client_Desc" Value="Start DWO Remote Support." />
 
-	<String Id="SC_Client_Tray" Value="DWO Remote Client Tray" />
-	<String Id="SC_Client_Tray_Desc" Value="Start the DWO Remote Client tray." />
+	<String Id="SC_Client_Tray" Value="DWO Remote Support Tray" />
+	<String Id="SC_Client_Tray_Desc" Value="Start the DWO Remote Support tray." />
 
 	<!-- Server related strings -->
 	<String Id="F_Server" Value="Server" />
-	<String Id="F_Server_Desc" Value="The service part of DWO Remote Client. Provides the media library and related services." />
+	<String Id="F_Server_Desc" Value="The service part of DWO Remote Support. Provides the media library and related services." />
 	<String Id="F_Server_Plugins" Value="Plugins" />
 	<String Id="F_Server_Plugins_Desc" Value="Plugins for the server." />
 
-	<String Id="Service_DisplayName" Value="DWO Remote Client Service" />
-	<String Id="Service_Description" Value="This service runs the DWO Remote Client." />
+	<String Id="Service_DisplayName" Value="DWO Remote Support Service" />
+	<String Id="Service_Description" Value="This service runs the DWO Remote Support." />
 
 	<!-- Launch Conditions -->
 	<String Id="LC_OS" Value="[ProductName] requires minimum Windows 7 / 2008 R2 as operating system." />
@@ -54,6 +54,6 @@ This file contains the declaration of all the localizable strings.
 
 	<String Id="MyInstallDirDlgDesktopShortcuts" Value="Create desktop icon" />
 	<String Id="MyInstallDirDlgStartMenuShortcuts" Value="Create start menu shortcuts" />
-	<String Id="MyInstallDirDlgPrinter" Value="Install DWO Remote Client Printer" />
+	<String Id="MyInstallDirDlgPrinter" Value="Install DWO Remote Printer" />
 
 </WixLocalization>

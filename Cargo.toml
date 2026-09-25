@@ -213,6 +213,7 @@ exclude = ["vdi/host", "examples/custom_plugin"]
 libxdo-sys = { path = "libs/libxdo-sys-stub" }
 
 [package.metadata.winres]
+CompanyName = "Digitalwerk Oberland"
 LegalCopyright = "Copyright © 2026 Digitalwerk Oberland. All rights reserved."
 ProductName = "DWO Remote-Support"
 FileDescription = "DWO Remote-Support Client"

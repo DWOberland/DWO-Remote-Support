@@ -2052,6 +2052,14 @@ pub fn rustdesk_interval(i: Interval) -> ThrottledInterval {
 }
 
 pub fn load_custom_client() {
+    // The macOS bundle is /Applications/DWO-Remote-Support.app (PRODUCT_NAME in
+    // flutter/macos/Runner/Configs/AppInfo.xcconfig). Install checks and the
+    // LaunchDaemon/LaunchAgent paths are derived from the app name, so it must match.
+    // Windows keeps "RustDesk": the MSI service, exe and registry key are named "rustdesk".
+    #[cfg(target_os = "macos")]
+    {
+        *config::APP_NAME.write().unwrap() = "DWO-Remote-Support".to_owned();
+    }
     #[cfg(debug_assertions)]
     if let Ok(data) = std::fs::read_to_string("./custom.txt") {
         read_custom_client(data.trim());

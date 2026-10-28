@@ -17,6 +17,7 @@ jobs:
         id: legacy
         continue-on-error: true
         run: |
+          set -o pipefail
           sudo pip3 install git+https://github.com/rustdesk-org/appimage-builder.git 2>&1 | tee /tmp/dwo-appimage-install.log
 
       - name: Confirm the known packaging compatibility failure

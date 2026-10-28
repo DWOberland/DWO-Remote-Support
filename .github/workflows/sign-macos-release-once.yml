@@ -13,10 +13,14 @@ permissions:
 jobs:
   sign:
     runs-on: macos-15-intel
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
         include:
+          - arch: x86_64
+            source_run: 40753481269
+            output_name: dwo-remote-client-macx86.dmg
           - arch: aarch64
             source_run: 40758365697
             output_name: dwo-remote-client-mac_aarm.dmg
@@ -86,9 +90,17 @@ jobs:
           create-dmg --volname "DWO-Remote-Support" --icon "DWO-Remote-Support.app" 200 190 --hide-extension "DWO-Remote-Support.app" --window-size 800 400 --app-drop-link 600 185 "DWO-Remote-Support-1.0.0-${{ matrix.arch }}.dmg" "$RUNNER_TEMP/dwo-sign/DWO-Remote-Support.app"
           codesign --force --timestamp --sign "$SIGNING_IDENTITY" "DWO-Remote-Support-1.0.0-${{ matrix.arch }}.dmg"
 
+      - name: Preserve signed package before Apple processing
+        uses: actions/upload-artifact@v4
+        with:
+          name: dwo-remote-support-signed-pending-notarization-${{ matrix.arch }}
+          path: DWO-Remote-Support-1.0.0-${{ matrix.arch }}.dmg
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Notarize, staple and verify Gatekeeper acceptance
         run: |
-          "$RUNNER_TEMP/apple-codesign-0.22.0-macos-universal/rcodesign" notary-submit --api-key-path "$RUNNER_TEMP/dwo-notarize.json" --staple "DWO-Remote-Support-1.0.0-${{ matrix.arch }}.dmg"
+          "$RUNNER_TEMP/apple-codesign-0.22.0-macos-universal/rcodesign" notary-submit --max-wait-seconds 3600 --api-key-path "$RUNNER_TEMP/dwo-notarize.json" --staple "DWO-Remote-Support-1.0.0-${{ matrix.arch }}.dmg"
           xcrun stapler validate "DWO-Remote-Support-1.0.0-${{ matrix.arch }}.dmg"
           codesign --verify --strict "DWO-Remote-Support-1.0.0-${{ matrix.arch }}.dmg"
           spctl --assess --type open --context context:primary-signature --verbose=2 "DWO-Remote-Support-1.0.0-${{ matrix.arch }}.dmg"

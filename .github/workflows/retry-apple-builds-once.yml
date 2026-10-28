@@ -1,0 +1,422 @@
+name: Retry Apple builds on macOS 15
+on:
+  push:
+    branches:
+      - codex/rebuild-all-2026-10-28
+    paths:
+      - .github/workflows/retry-apple-builds-once.yml
+
+permissions:
+  contents: write
+
+env:
+  RUST_VERSION: "1.75"
+  MAC_RUST_VERSION: "1.81"
+  FLUTTER_VERSION: "3.24.5"
+  VCPKG_COMMIT_ID: "120deac3062162151622ca4860575a33844ba10b"
+  VERSION: "1.0.0"
+  UPLOAD_ARTIFACT: "true"
+  TAG_NAME: "nightly"
+
+jobs:
+  generate-bridge:
+    uses: ./.github/workflows/bridge.yml
+
+  build-rustdesk-ios:
+    name: build rustdesk ios ipa
+    runs-on: ${{ matrix.job.os }}
+    needs: [generate-bridge]
+    strategy:
+      fail-fast: false
+      matrix:
+        job:
+          - {
+              arch: aarch64,
+              target: aarch64-apple-ios,
+              os: macos-15,
+              vcpkg-triplet: arm64-ios,
+            }
+    steps:
+      - name: Export GitHub Actions cache environment variables
+        uses: actions/github-script@v6
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+      - name: Install dependencies
+        run: |
+          brew install nasm yasm
+      - name: Checkout source code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - name: Patch flutter
+        run: |
+          cd $(dirname $(dirname $(which flutter)))
+          [[ "3.24.5" == ${{env.FLUTTER_VERSION}} ]] && git apply ${{ github.workspace }}/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff
+
+      - name: Setup vcpkg with Github Actions binary cache
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
+          doNotCache: false
+
+      - name: Install vcpkg dependencies
+        run: |
+          if ! $VCPKG_ROOT/vcpkg \
+            install \
+            --triplet ${{ matrix.job.vcpkg-triplet }} \
+            --x-install-root="$VCPKG_ROOT/installed"; then
+            find "${VCPKG_ROOT}/" -name "*.log" | while read -r _1; do
+              echo "$_1:"
+              echo "======"
+              cat "$_1"
+              echo "======"
+              echo ""
+            done
+            exit 1
+          fi
+          head -n 100 "${VCPKG_ROOT}/buildtrees/ffmpeg/build-${{ matrix.job.vcpkg-triplet }}-rel-out.log" || true
+        shell: bash
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: ${{ matrix.job.target }}
+          components: "rustfmt"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: rustdesk-lib-cache-ios
+          key: ${{ matrix.job.target }}
+
+      - name: Restore bridge files
+        uses: actions/download-artifact@master
+        with:
+          name: bridge-artifact
+          path: ./
+
+      - name: Build rustdesk lib
+        run: |
+          rustup target add ${{ matrix.job.target }}
+          cargo build --features flutter,hwcodec --release --target aarch64-apple-ios --lib
+          
+      - name: Upload liblibrustdesk.a Artifacts
+        uses: actions/upload-artifact@master
+        with:
+          name: liblibrustdesk.a
+          path: target/aarch64-apple-ios/release/liblibrustdesk.a
+
+      - name: Build rustdesk
+        shell: bash
+        run: |
+          pushd flutter
+          # flutter build ipa --release --obfuscate --split-debug-info=./split-debug-info --no-codesign
+          # for easy debugging
+          flutter build ipa --release --no-codesign
+
+      # - name: Upload Artifacts
+      #   # if: env.ANDROID_SIGNING_KEY != null && env.UPLOAD_ARTIFACT == 'true'
+      #   uses: actions/upload-artifact@master
+      #   with:
+      #     name: rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.apk
+      #     path: flutter/build/ios/ipa/*.ipa
+
+      # - name: Publish ipa package
+      #   # if: env.ANDROID_SIGNING_KEY != null && env.UPLOAD_ARTIFACT == 'true'
+      #   uses: softprops/action-gh-release@v1
+      #   with:
+      #     prerelease: true
+      #     tag_name: ${{ env.TAG_NAME }}
+      #     files: |
+      #       flutter/build/ios/ipa/*.ipa
+
+
+
+  build-for-macOS:
+    env:
+      MACOS_P12_BASE64: "${{ secrets.MACOS_P12_BASE64 }}"
+    name: ${{ matrix.job.target }}
+    runs-on: ${{ matrix.job.os }}
+    needs: [generate-bridge]
+    strategy:
+      fail-fast: false
+      matrix:
+        job:
+          - {
+              target: aarch64-apple-darwin,
+              os: macos-15,
+              # extra-build-args: "--disable-flutter-texture-render", # disable this for mac, because we see a lot of users reporting flickering both on arm and x64, and we can not confirm if texture rendering has better performance if htere is no vram, https://github.com/rustdesk/rustdesk/issues/6296
+              extra-build-args: "--screencapturekit",
+              arch: aarch64,
+              vcpkg-triplet: arm64-osx,
+            }
+    steps:
+      - name: Validate signing secrets for verification
+        env:
+          P12_PASSWORD: ${{ secrets.MACOS_P12_PASSWORD }}
+          CODESIGN_IDENTITY: ${{ secrets.MACOS_CODESIGN_IDENTITY }}
+          NOTARIZE_JSON: ${{ secrets.MACOS_NOTARIZE_JSON }}
+        run: |
+          test -n "$MACOS_P12_BASE64"
+          test -n "$P12_PASSWORD"
+          test -n "$CODESIGN_IDENTITY"
+          test -n "$NOTARIZE_JSON"
+
+      - name: Export GitHub Actions cache environment variables
+        uses: actions/github-script@v6
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+      - name: Checkout source code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Force DWO Server Config (macOS)
+        shell: bash
+        run: |
+          CONFIG_FILE="libs/hbb_common/src/config.rs"
+
+          if [ ! -f "$CONFIG_FILE" ]; then
+            echo "Missing config file: $CONFIG_FILE"
+            exit 1
+          fi
+
+          echo "=== Before patch ==="
+          grep -nE 'RENDEZVOUS_SERVER|RENDEZVOUS_SERVERS|API_SERVER|RS_PUB_KEY|rustdesk.com' "$CONFIG_FILE" || true
+
+          echo "=== Patch macOS DWO server config ==="
+          perl -0pi -e 's#pub const RENDEZVOUS_SERVERS:\s*&\[\&str\]\s*=\s*&\[[^\]]*\];#pub const RENDEZVOUS_SERVERS: &[&str] = &["remote.dwoberland.de"];#g' "$CONFIG_FILE"
+          perl -0pi -e 's#pub const API_SERVER:\s*&str\s*=\s*".*?";#pub const API_SERVER: \&str = "";#g' "$CONFIG_FILE"
+
+          echo "=== After patch ==="
+          grep -nE 'RENDEZVOUS_SERVER|RENDEZVOUS_SERVERS|API_SERVER|RS_PUB_KEY|rustdesk.com' "$CONFIG_FILE" || true
+
+          echo "=== Validate config ==="
+          grep -q 'pub const RENDEZVOUS_SERVERS: &\[&str\] = &\["remote.dwoberland.de"\];' "$CONFIG_FILE" || {
+            echo "RENDEZVOUS_SERVERS was not patched correctly"
+            exit 1
+          }
+
+          if grep -q 'rs-ny.rustdesk.com\|rs-sg.rustdesk.com\|rs-cn.rustdesk.com' "$CONFIG_FILE"; then
+            echo "Public RustDesk rendezvous server still found"
+            exit 1
+          fi
+
+      - name: Import the codesign cert
+        if: env.MACOS_P12_BASE64 != null
+        uses: apple-actions/import-codesign-certs@v1
+        with:
+          p12-file-base64: ${{ secrets.MACOS_P12_BASE64 }}
+          p12-password: ${{ secrets.MACOS_P12_PASSWORD }}
+          keychain-password: ${{ secrets.MACOS_P12_PASSWORD }}
+          keychain: rustdesk
+
+      - name: Check sign and import sign key
+        if: env.MACOS_P12_BASE64 != null
+        run: |
+          security default-keychain -s rustdesk.keychain
+          security find-identity -v
+
+      - name: Import notarize key
+        if: env.MACOS_P12_BASE64 != null
+        uses: timheuer/base64-to-file@v1.2
+        with:
+          # https://gregoryszorc.com/docs/apple-codesign/stable/apple_codesign_rcodesign.html#notarizing-and-stapling
+          fileName: rustdesk.json
+          fileDir: ${{ github.workspace }}
+          encodedString: ${{ secrets.MACOS_NOTARIZE_JSON }}
+
+      - name: Install rcodesign tool
+        if: env.MACOS_P12_BASE64 != null
+        shell: bash
+        run: |
+          pushd /tmp
+          wget https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F0.22.0/apple-codesign-0.22.0-macos-universal.tar.gz
+          tar -zxvf apple-codesign-0.22.0-macos-universal.tar.gz
+          mv apple-codesign-0.22.0-macos-universal/rcodesign /usr/local/bin
+          popd
+
+      - name: Install build runtime
+        run: |
+          brew install llvm create-dmg
+          # pkg-config is handled in a separate step, because it may be already installed by `macos-latest`(14.7.1) runner
+          if command -v pkg-config &>/dev/null; then
+              echo "pkg-config is already installed"
+          else
+              brew install pkg-config
+          fi
+
+      - name: Install NASM
+        run: |
+          # Install NASM 2.16.x from official release.
+          # Do NOT use `brew install nasm` which installs NASM 3.x.
+          # NASM 3.x is a complete rewrite with incompatible CLI options and removed features.
+          # aom and other multimedia libraries require NASM 2.x for x86/x86_64 assembly.
+          wget https://www.nasm.us/pub/nasm/releasebuilds/2.16.03/macosx/nasm-2.16.03-macosx.zip
+          unzip nasm-2.16.03-macosx.zip
+          sudo cp nasm-2.16.03/nasm /usr/local/bin/nasm
+          nasm --version
+
+      - name: Install flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - name: Patch flutter
+        run: |
+          cd $(dirname $(dirname $(which flutter)))
+          [[ "3.24.5" == ${{env.FLUTTER_VERSION}} ]] && git apply ${{ github.workspace }}/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff
+
+      - name: Workaround for flutter issue
+        shell: bash
+        run: |
+          cd "$(dirname "$(which flutter)")"
+          # https://github.com/flutter/flutter/issues/133533
+          sed -i -e 's/_setFramesEnabledState(false);/\/\/_setFramesEnabledState(false);/g' ../packages/flutter/lib/src/scheduler/binding.dart
+          grep -n '_setFramesEnabledState(false);' ../packages/flutter/lib/src/scheduler/binding.dart
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ env.MAC_RUST_VERSION }}
+          targets: ${{ matrix.job.target }}
+          components: "rustfmt"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: ${{ matrix.job.os }}
+
+      - name: Restore bridge files
+        uses: actions/download-artifact@master
+        with:
+          name: bridge-artifact
+          path: ./
+
+      - name: Setup vcpkg with Github Actions binary cache
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgDirectory: ${{ runner.temp }}/vcpkg
+          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
+          doNotCache: false
+
+      - name: Show vcpkg path
+        run: |
+          echo "VCPKG_ROOT=$VCPKG_ROOT"
+          ls -la "$VCPKG_ROOT" || true
+
+      - name: Install vcpkg dependencies
+        run: |
+          if ! $VCPKG_ROOT/vcpkg \
+            install \
+            --x-install-root="$VCPKG_ROOT/installed"; then
+            find "${VCPKG_ROOT}/" -name "*.log" | while read -r _1; do
+              echo "$_1:"
+              echo "======"
+              cat "$_1"
+              echo "======"
+              echo ""
+            done
+            exit 1
+          fi
+          head -n 100 "${VCPKG_ROOT}/buildtrees/ffmpeg/build-${{ matrix.job.vcpkg-triplet }}-rel-out.log" || true
+
+      - name: Show version information (Rust, cargo, Clang)
+        shell: bash
+        run: |
+          clang --version || true
+          rustup -V
+          rustup toolchain list
+          rustup default
+          cargo -V
+          rustc -V
+
+      - name: Build rustdesk
+        run: |
+          if [ "${{ matrix.job.target }}" = "aarch64-apple-darwin" ]; then
+            MIN_MACOS_VERSION="12.3"
+            sed -i -e "s/MACOSX_DEPLOYMENT_TARGET\=[0-9]*.[0-9]*/MACOSX_DEPLOYMENT_TARGET=${MIN_MACOS_VERSION}/" build.py
+            sed -i -e "s/platform :osx, '.*'/platform :osx, '${MIN_MACOS_VERSION}'/" flutter/macos/Podfile
+            sed -i -e "s/osx_minimum_system_version = \"[0-9]*.[0-9]*\"/osx_minimum_system_version = \"${MIN_MACOS_VERSION}\"/" Cargo.toml
+            sed -i -e "s/MACOSX_DEPLOYMENT_TARGET = [0-9]*.[0-9]*;/MACOSX_DEPLOYMENT_TARGET = ${MIN_MACOS_VERSION};/" flutter/macos/Runner.xcodeproj/project.pbxproj
+          fi
+          ./build.py --flutter --hwcodec --unix-file-copy-paste ${{ matrix.job.extra-build-args }}
+
+      - name: create unsigned dmg
+        if: env.UPLOAD_ARTIFACT == 'true'
+        run: |
+          CREATE_DMG="$(command -v create-dmg)"
+          CREATE_DMG="$(readlink -f "$CREATE_DMG")"
+          sed -i -e 's/MAXIMUM_UNMOUNTING_ATTEMPTS=3/MAXIMUM_UNMOUNTING_ATTEMPTS=7/' "$CREATE_DMG"
+          create-dmg --volname "DWO-Remote-Support" --icon "DWO-Remote-Support.app" 200 190 --hide-extension "DWO-Remote-Support.app" --window-size 800 400 --app-drop-link 600 185 DWO-Remote-Support-${{ env.VERSION }}-${{ matrix.job.arch }}.dmg ./flutter/build/macos/Build/Products/Release/DWO-Remote-Support.app
+          
+      - name: Upload unsigned macOS app
+        if: env.UPLOAD_ARTIFACT == 'true'
+        uses: actions/upload-artifact@master
+        with:
+          name: rustdesk-unsigned-macos-${{ matrix.job.arch }}
+          path: DWO-Remote-Support-${{ env.VERSION }}-${{ matrix.job.arch }}.dmg # can not upload the directory directly or tar.gz, which destroy the link structure, causing the codesign failed
+
+      - name: Codesign app and create signed dmg
+        if: env.MACOS_P12_BASE64 != null && env.UPLOAD_ARTIFACT == 'true'
+        run: |
+          # Patch create-dmg to give more attempts to unmount image
+          CREATE_DMG="$(command -v create-dmg)"
+          CREATE_DMG="$(readlink -f "$CREATE_DMG")"
+          sed -i -e 's/MAXIMUM_UNMOUNTING_ATTEMPTS=3/MAXIMUM_UNMOUNTING_ATTEMPTS=7/' "$CREATE_DMG"
+          # Unlock keychain
+          security default-keychain -s rustdesk.keychain
+          security unlock-keychain -p "${{ secrets.MACOS_P12_PASSWORD }}" rustdesk.keychain
+          # start sign the DWO-Remote-Support.dmg and dmg
+          rm -rf *.dmg || true
+          codesign --force --timestamp --options runtime --preserve-metadata=entitlements -s "${{ secrets.MACOS_CODESIGN_IDENTITY }}" --deep --strict ./flutter/build/macos/Build/Products/Release/DWO-Remote-Support.app -vvv
+          codesign --verify --deep --strict ./flutter/build/macos/Build/Products/Release/DWO-Remote-Support.app
+          create-dmg --volname "DWO-Remote-Support" --icon "DWO-Remote-Support.app" 200 190 --hide-extension "DWO-Remote-Support.app" --window-size 800 400 --app-drop-link 600 185 DWO-Remote-Support-${{ env.VERSION }}.dmg ./flutter/build/macos/Build/Products/Release/DWO-Remote-Support.app
+          codesign --force --timestamp --options runtime -s "${{ secrets.MACOS_CODESIGN_IDENTITY }}" --deep --strict DWO-Remote-Support-${{ env.VERSION }}.dmg -vvv
+          # notarize the dmg
+          rcodesign notary-submit --api-key-path ${{ github.workspace }}/rustdesk.json  --staple DWO-Remote-Support-${{ env.VERSION }}.dmg
+          xcrun stapler validate DWO-Remote-Support-${{ env.VERSION }}.dmg
+          codesign --verify --strict DWO-Remote-Support-${{ env.VERSION }}.dmg
+
+      - name: Rename rustdesk
+        if: env.UPLOAD_ARTIFACT == 'true'
+        run: |
+          for name in DWO-Remote-Support*.dmg; do
+            if [ -e "$name" ]; then
+              if [ "${{ matrix.job.arch }}" == "aarch64" ]; then
+                mv "$name" "dwo-remote-client-mac_aarm.dmg"
+              else
+                mv "$name" "dwo-remote-client-macx86.dmg"
+              fi
+            fi
+          done
+
+      - name: Upload signed macOS verification package
+        if: env.MACOS_P12_BASE64 != '' && env.UPLOAD_ARTIFACT == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dwo-remote-support-signed-macos-${{ matrix.job.arch }}
+          path: dwo-remote-client-mac*.dmg
+
+      - name: Publish DMG package
+        if: env.UPLOAD_ARTIFACT == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          prerelease: true
+          tag_name: ${{ env.TAG_NAME }}
+          files: |
+            dwo-remote-client-mac*.dmg
+

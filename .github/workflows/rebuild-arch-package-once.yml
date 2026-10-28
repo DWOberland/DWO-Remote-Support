@@ -1,0 +1,53 @@
+name: Rebuild Arch Linux package from current application build
+on:
+  push:
+    branches:
+      - codex/rebuild-all-2026-10-28
+    paths:
+      - .github/workflows/rebuild-arch-package-once.yml
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  package:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout matching package recipe
+        uses: actions/checkout@v4
+        with:
+          ref: aac458da54dfee96683f1f6d572c59bd017a2f7a
+
+      - name: Download current Linux application
+        uses: actions/download-artifact@v4
+        with:
+          name: rustdesk-1.0.0-x86_64.deb
+          run-id: 40753481269
+          github-token: ${{ github.token }}
+
+      - name: Restore current Flutter bundle for the original Arch recipe
+        run: |
+          dpkg-deb --extract rustdesk-1.0.0-x86_64.deb "$RUNNER_TEMP/dwo-current-deb"
+          mkdir -p flutter/build/linux/x64/release/bundle
+          cp -a "$RUNNER_TEMP/dwo-current-deb/usr/share/rustdesk/." flutter/build/linux/x64/release/bundle/
+
+      - name: Build Arch Linux package using the original recipe
+        uses: rustdesk-org/arch-makepkg-action@master
+        with:
+          scripts: |
+            cd res && HBB="${GITHUB_WORKSPACE}" FLUTTER=1 makepkg -f
+
+      - name: Upload current Arch Linux package
+        uses: actions/upload-artifact@v4
+        with:
+          name: dwo-remote-support-arch-x86_64
+          path: res/rustdesk-*.pkg.tar.zst
+          if-no-files-found: error
+
+      - name: Publish current Arch Linux package
+        uses: softprops/action-gh-release@v1
+        with:
+          prerelease: true
+          tag_name: nightly
+          files: res/rustdesk-*.pkg.tar.zst

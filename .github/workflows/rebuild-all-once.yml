@@ -1,0 +1,20 @@
+name: Rebuild all DWO Remote Support platforms
+run-name: Rebuild all platforms for 2026-10-28
+on:
+  push:
+    branches:
+      - codex/rebuild-all-2026-10-28
+    paths:
+      - .github/workflows/rebuild-all-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    uses: ./.github/workflows/flutter-build.yml
+    with:
+      upload-artifact: true
+      upload-tag: nightly
+      macos-signing-check: false
+    secrets: inherit

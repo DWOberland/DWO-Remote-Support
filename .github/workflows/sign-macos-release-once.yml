@@ -1,0 +1,117 @@
+name: Sign and notarize current macOS build
+on:
+  push:
+    branches:
+      - codex/rebuild-all-2026-10-28
+    paths:
+      - .github/workflows/sign-macos-release-once.yml
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  sign:
+    runs-on: macos-15-intel
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            source_run: 40753481269
+            output_name: dwo-remote-client-macx86.dmg
+    steps:
+      - name: Checkout distribution entitlements
+        uses: actions/checkout@v4
+        with:
+          ref: aac458da54dfee96683f1f6d572c59bd017a2f7a
+
+      - name: Download the existing unsigned app build
+        uses: actions/download-artifact@v4
+        with:
+          name: rustdesk-unsigned-macos-${{ matrix.arch }}
+          run-id: ${{ matrix.source_run }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/dwo-unsigned-input
+
+      - name: Import the approved Developer ID identity
+        uses: apple-actions/import-codesign-certs@v1
+        with:
+          p12-file-base64: ${{ secrets.MACOS_P12_BASE64 }}
+          p12-password: ${{ secrets.MACOS_P12_PASSWORD }}
+          keychain-password: ${{ secrets.MACOS_P12_PASSWORD }}
+          keychain: dwo_signing
+
+      - name: Prepare notarization credentials and packaging tools
+        env:
+          NOTARIZE_JSON: ${{ secrets.MACOS_NOTARIZE_JSON }}
+        run: |
+          python3 -c 'import base64,os,pathlib; p=pathlib.Path(os.environ["RUNNER_TEMP"])/"dwo-notarize.json"; p.write_bytes(base64.b64decode(os.environ["NOTARIZE_JSON"],validate=True)); p.chmod(0o600)'
+          brew install create-dmg
+          curl -fL "https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F0.22.0/apple-codesign-0.22.0-macos-universal.tar.gz" -o "$RUNNER_TEMP/dwo-rcodesign.tar.gz"
+          tar -xzf "$RUNNER_TEMP/dwo-rcodesign.tar.gz" -C "$RUNNER_TEMP"
+
+      - name: Restore app from the existing unsigned disk image
+        run: |
+          MOUNT_PATH="$RUNNER_TEMP/dwo-unsigned-mount"
+          mkdir -p "$MOUNT_PATH" "$RUNNER_TEMP/dwo-sign"
+          trap 'hdiutil detach "$MOUNT_PATH" >/dev/null 2>&1 || true' EXIT
+          hdiutil attach -readonly -nobrowse -mountpoint "$MOUNT_PATH" "$RUNNER_TEMP/dwo-unsigned-input/DWO-Remote-Support-1.0.0-${{ matrix.arch }}.dmg"
+          ditto "$MOUNT_PATH/DWO-Remote-Support.app" "$RUNNER_TEMP/dwo-sign/DWO-Remote-Support.app"
+          hdiutil detach "$MOUNT_PATH"
+          trap - EXIT
+
+      - name: Sign with explicit distribution entitlements
+        env:
+          SIGNING_IDENTITY: ${{ secrets.MACOS_CODESIGN_IDENTITY }}
+          KEYCHAIN_PASSWORD: ${{ secrets.MACOS_P12_PASSWORD }}
+        run: |
+          APP_PATH="$RUNNER_TEMP/dwo-sign/DWO-Remote-Support.app"
+          security default-keychain -s dwo_signing.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" dwo_signing.keychain
+          plutil -lint flutter/macos/Runner/Release.entitlements
+          codesign --force --timestamp --options runtime --sign "$SIGNING_IDENTITY" --deep --strict "$APP_PATH"
+          codesign --force --timestamp --options runtime --entitlements flutter/macos/Runner/Release.entitlements --sign "$SIGNING_IDENTITY" --strict "$APP_PATH"
+          codesign --display --entitlements - --xml "$APP_PATH" > "$RUNNER_TEMP/dwo-distribution-entitlements.plist"
+          python3 -c 'import plistlib,os,pathlib; p=plistlib.loads((pathlib.Path(os.environ["RUNNER_TEMP"])/"dwo-distribution-entitlements.plist").read_bytes()); assert "com.apple.security.get-task-allow" not in p; assert p.get("com.apple.security.cs.allow-jit") is True; print("Distribution entitlements verified: no debugging entitlement.")'
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+
+      - name: Create signed distribution disk image
+        env:
+          SIGNING_IDENTITY: ${{ secrets.MACOS_CODESIGN_IDENTITY }}
+        run: |
+          CREATE_DMG="$(command -v create-dmg)"
+          CREATE_DMG="$(readlink -f "$CREATE_DMG")"
+          sed -i -e 's/MAXIMUM_UNMOUNTING_ATTEMPTS=3/MAXIMUM_UNMOUNTING_ATTEMPTS=7/' "$CREATE_DMG"
+          create-dmg --volname "DWO-Remote-Support" --icon "DWO-Remote-Support.app" 200 190 --hide-extension "DWO-Remote-Support.app" --window-size 800 400 --app-drop-link 600 185 "DWO-Remote-Support-1.0.0-${{ matrix.arch }}.dmg" "$RUNNER_TEMP/dwo-sign/DWO-Remote-Support.app"
+          codesign --force --timestamp --sign "$SIGNING_IDENTITY" "DWO-Remote-Support-1.0.0-${{ matrix.arch }}.dmg"
+
+      - name: Notarize, staple and verify Gatekeeper acceptance
+        run: |
+          "$RUNNER_TEMP/apple-codesign-0.22.0-macos-universal/rcodesign" notary-submit --api-key-path "$RUNNER_TEMP/dwo-notarize.json" --staple "DWO-Remote-Support-1.0.0-${{ matrix.arch }}.dmg"
+          xcrun stapler validate "DWO-Remote-Support-1.0.0-${{ matrix.arch }}.dmg"
+          codesign --verify --strict "DWO-Remote-Support-1.0.0-${{ matrix.arch }}.dmg"
+          spctl --assess --type open --context context:primary-signature --verbose=2 "DWO-Remote-Support-1.0.0-${{ matrix.arch }}.dmg"
+          mv "DWO-Remote-Support-1.0.0-${{ matrix.arch }}.dmg" "${{ matrix.output_name }}"
+          shasum -a 256 "${{ matrix.output_name }}"
+
+      - name: Upload notarized distribution package
+        uses: actions/upload-artifact@v4
+        with:
+          name: dwo-remote-support-notarized-${{ matrix.arch }}
+          path: ${{ matrix.output_name }}
+          if-no-files-found: error
+
+      - name: Publish notarized distribution package
+        uses: softprops/action-gh-release@v1
+        with:
+          prerelease: true
+          tag_name: nightly
+          files: ${{ matrix.output_name }}
+          fail_on_unmatched_files: true
+
+      - name: Clean up temporary signing access
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/dwo-notarize.json"
+          security delete-keychain dwo_signing.keychain || true

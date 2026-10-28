@@ -17,9 +17,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - arch: x86_64
-            source_run: 40753481269
-            output_name: dwo-remote-client-macx86.dmg
+          - arch: aarch64
+            source_run: 40758365697
+            output_name: dwo-remote-client-mac_aarm.dmg
     steps:
       - name: Checkout distribution entitlements
         uses: actions/checkout@v4

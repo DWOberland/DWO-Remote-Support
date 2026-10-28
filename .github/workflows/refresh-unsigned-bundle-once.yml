@@ -1,0 +1,64 @@
+name: Refresh unsigned bundle from current builds
+on:
+  push:
+    branches:
+      - codex/rebuild-all-2026-10-28
+    paths:
+      - .github/workflows/refresh-unsigned-bundle-once.yml
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  bundle:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Download current unsigned Intel Mac package
+        uses: actions/download-artifact@v4
+        with:
+          name: rustdesk-unsigned-macos-x86_64
+          run-id: 40753481269
+          github-token: ${{ github.token }}
+          path: .
+
+      - name: Download current unsigned Apple Silicon package
+        uses: actions/download-artifact@v4
+        with:
+          name: rustdesk-unsigned-macos-aarch64
+          run-id: 40758365697
+          github-token: ${{ github.token }}
+          path: .
+
+      - name: Download current unsigned Windows 64-bit files
+        uses: actions/download-artifact@v4
+        with:
+          name: rustdesk-unsigned-windows-x86_64
+          run-id: 40753481269
+          github-token: ${{ github.token }}
+          path: windows-x86_64
+
+      - name: Download current unsigned Windows 32-bit files
+        uses: actions/download-artifact@v4
+        with:
+          name: rustdesk-unsigned-windows-x86
+          run-id: 40753481269
+          github-token: ${{ github.token }}
+          path: windows-x86
+
+      - name: Combine current unsigned packages
+        run: tar czf rustdesk-1.0.0-unsigned.tar.gz *.dmg windows-x86_64 windows-x86
+
+      - name: Upload current unsigned bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: dwo-remote-support-unsigned-bundle
+          path: rustdesk-1.0.0-unsigned.tar.gz
+          if-no-files-found: error
+
+      - name: Publish current unsigned bundle
+        uses: softprops/action-gh-release@v1
+        with:
+          prerelease: true
+          tag_name: nightly
+          files: rustdesk-1.0.0-unsigned.tar.gz

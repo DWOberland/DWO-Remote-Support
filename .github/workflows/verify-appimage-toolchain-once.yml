@@ -1,0 +1,35 @@
+name: Verify AppImage packaging toolchain
+on:
+  push:
+    branches:
+      - codex/rebuild-all-2026-10-28
+    paths:
+      - .github/workflows/verify-appimage-toolchain-once.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Reproduce existing AppImage builder installation
+        id: legacy
+        continue-on-error: true
+        run: |
+          sudo pip3 install git+https://github.com/rustdesk-org/appimage-builder.git 2>&1 | tee /tmp/dwo-appimage-install.log
+
+      - name: Confirm the known packaging compatibility failure
+        if: steps.legacy.outcome == 'failure'
+        run: grep -q 'ignore_egg_info_in_manifest' /tmp/dwo-appimage-install.log
+
+      - name: Upgrade Python packaging tools
+        if: steps.legacy.outcome == 'failure'
+        run: sudo python3 -m pip install --upgrade pip setuptools wheel
+
+      - name: Install AppImage builder with isolated build dependencies
+        if: steps.legacy.outcome == 'failure'
+        run: sudo python3 -m pip install --use-pep517 git+https://github.com/rustdesk-org/appimage-builder.git
+
+      - name: Verify AppImage builder starts
+        run: appimage-builder --version

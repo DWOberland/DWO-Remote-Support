@@ -47,6 +47,8 @@ jobs:
       - name: Build AppImage
         run: |
           cd appimage
+          sed -i "s/^    version: .*/    version: ${VERSION}/" "./AppImageBuilder-${{ matrix.arch }}.yml"
+          grep -q "^    version: ${VERSION}$" "./AppImageBuilder-${{ matrix.arch }}.yml"
           sudo appimage-builder --skip-tests --recipe "./AppImageBuilder-${{ matrix.arch }}.yml"
 
       - name: Upload rebuilt AppImage

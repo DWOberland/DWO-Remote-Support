@@ -614,7 +614,7 @@ jobs:
           - {
               arch: aarch64,
               target: aarch64-apple-ios,
-              os: macos-latest,
+              os: macos-15,
               vcpkg-triplet: arm64-ios,
             }
     steps:
@@ -741,7 +741,7 @@ jobs:
             }
           - {
               target: aarch64-apple-darwin,
-              os: macos-14,
+              os: macos-15,
               # extra-build-args: "--disable-flutter-texture-render", # disable this for mac, because we see a lot of users reporting flickering both on arm and x64, and we can not confirm if texture rendering has better performance if htere is no vram, https://github.com/rustdesk/rustdesk/issues/6296
               extra-build-args: "--screencapturekit",
               arch: aarch64,
@@ -970,7 +970,12 @@ jobs:
           security unlock-keychain -p "${{ secrets.MACOS_P12_PASSWORD }}" rustdesk.keychain
           # start sign the DWO-Remote-Support.dmg and dmg
           rm -rf *.dmg || true
-          codesign --force --timestamp --options runtime --preserve-metadata=entitlements -s "${{ secrets.MACOS_CODESIGN_IDENTITY }}" --deep --strict ./flutter/build/macos/Build/Products/Release/DWO-Remote-Support.app -vvv
+          APP_PATH="./flutter/build/macos/Build/Products/Release/DWO-Remote-Support.app"
+          plutil -lint flutter/macos/Runner/Release.entitlements
+          codesign --force --timestamp --options runtime -s "${{ secrets.MACOS_CODESIGN_IDENTITY }}" --deep --strict "$APP_PATH"
+          codesign --force --timestamp --options runtime --entitlements flutter/macos/Runner/Release.entitlements -s "${{ secrets.MACOS_CODESIGN_IDENTITY }}" --strict "$APP_PATH"
+          codesign --display --entitlements - --xml "$APP_PATH" > "$RUNNER_TEMP/dwo-distribution-entitlements.plist"
+          python3 -c 'import plistlib,os,pathlib; p=plistlib.loads((pathlib.Path(os.environ["RUNNER_TEMP"])/"dwo-distribution-entitlements.plist").read_bytes()); assert "com.apple.security.get-task-allow" not in p; assert p.get("com.apple.security.cs.allow-jit") is True; print("Distribution entitlements verified: no debugging entitlement.")'
           codesign --verify --deep --strict ./flutter/build/macos/Build/Products/Release/DWO-Remote-Support.app
           create-dmg --volname "DWO-Remote-Support" --icon "DWO-Remote-Support.app" 200 190 --hide-extension "DWO-Remote-Support.app" --window-size 800 400 --app-drop-link 600 185 DWO-Remote-Support-${{ env.VERSION }}.dmg ./flutter/build/macos/Build/Products/Release/DWO-Remote-Support.app
           codesign --force --timestamp --options runtime -s "${{ secrets.MACOS_CODESIGN_IDENTITY }}" --deep --strict DWO-Remote-Support-${{ env.VERSION }}.dmg -vvv
@@ -978,6 +983,7 @@ jobs:
           rcodesign notary-submit --api-key-path ${{ github.workspace }}/rustdesk.json  --staple DWO-Remote-Support-${{ env.VERSION }}.dmg
           xcrun stapler validate DWO-Remote-Support-${{ env.VERSION }}.dmg
           codesign --verify --strict DWO-Remote-Support-${{ env.VERSION }}.dmg
+          spctl --assess --type open --context context:primary-signature --verbose=2 DWO-Remote-Support-${{ env.VERSION }}.dmg
 
       - name: Rename rustdesk
         if: env.UPLOAD_ARTIFACT == 'true'
@@ -1872,7 +1878,8 @@ jobs:
           prerelease: true
           tag_name: ${{ env.TAG_NAME }}
           files: |
-            res/rustdesk-${{ env.VERSION }}*.zst
+            res/rustdesk-*.pkg.tar.zst
+          fail_on_unmatched_files: true
 
   build-rustdesk-linux-sciter:
     if: ${{ inputs.upload-artifact && !inputs.macos-signing-check }}
@@ -2141,6 +2148,8 @@ jobs:
           sudo python3 -m pip install --use-pep517 git+https://github.com/rustdesk-org/appimage-builder.git
           # run appimage-builder
           pushd appimage
+          sed -i "s/^    version: .*/    version: ${VERSION}/" "./AppImageBuilder-${{ matrix.job.arch }}.yml"
+          grep -q "^    version: ${VERSION}$" "./AppImageBuilder-${{ matrix.job.arch }}.yml"
           sudo appimage-builder --skip-tests --recipe ./AppImageBuilder-${{ matrix.job.arch }}.yml
 
       - name: Publish appimage package
@@ -2151,6 +2160,7 @@ jobs:
           tag_name: ${{ env.TAG_NAME }}
           files: |
             ./appimage/rustdesk-${{ env.VERSION }}-*.AppImage
+          fail_on_unmatched_files: true
 
   build-flatpak:
     name: Build flatpak ${{ matrix.job.target }}${{ matrix.job.suffix }}

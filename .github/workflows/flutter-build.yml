@@ -9,6 +9,10 @@ on:
       upload-tag:
         type: string
         default: "nightly"
+      macos-signing-check:
+        description: "Build and notarize only macOS; keep downloads as Actions artifacts"
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       upload-artifact:
@@ -17,6 +21,10 @@ on:
       upload-tag:
         type: string
         default: "nightly"
+      macos-signing-check:
+        description: "Build and notarize only macOS; keep downloads as Actions artifacts"
+        type: boolean
+        default: false
 
 # NOTE: F-Droid builder script 'flutter/build_fdroid.sh' reads environment
 # variables from this workflow!
@@ -51,7 +59,6 @@ env:
   NDK_VERSION: "r28c"
   #signing keys env variable checks
   ANDROID_SIGNING_KEY: "${{ secrets.ANDROID_SIGNING_KEY }}"
-  MACOS_P12_BASE64: "${{ secrets.MACOS_P12_BASE64 }}"
   UPLOAD_ARTIFACT: "${{ inputs.upload-artifact }}"
   SIGN_BASE_URL: "${{ secrets.SIGN_BASE_URL }}-2"
 
@@ -60,6 +67,7 @@ jobs:
     uses: ./.github/workflows/bridge.yml
 
   build-RustDeskTempTopMostWindow:
+    if: ${{ !inputs.macos-signing-check }}
     uses: ./.github/workflows/third-party-RustDeskTempTopMostWindow.yml
     with:
       upload-artifact: ${{ inputs.upload-artifact }}
@@ -71,6 +79,7 @@ jobs:
       fail-fast: false
 
   build-for-windows-flutter:
+    if: ${{ !inputs.macos-signing-check }}
     name: ${{ matrix.job.target }}
     needs: [build-RustDeskTempTopMostWindow, generate-bridge]
     runs-on: ${{ matrix.job.os }}
@@ -443,6 +452,7 @@ jobs:
 
   # The fallback for the flutter version, we use Sciter for 32bit Windows.
   build-for-windows-sciter:
+    if: ${{ !inputs.macos-signing-check }}
     name: ${{ matrix.job.target }} (${{ matrix.job.os }})
     runs-on: ${{ matrix.job.os }}
     # Temporarily disable this action due to additional test is needed.
@@ -593,7 +603,7 @@ jobs:
             ./SignOutput/dwo-remote-support-*.exe
 
   build-rustdesk-ios:
-    if: ${{ inputs.upload-artifact }}
+    if: ${{ inputs.upload-artifact && !inputs.macos-signing-check }}
     name: build rustdesk ios ipa
     runs-on: ${{ matrix.job.os }}
     needs: [generate-bridge]
@@ -713,6 +723,8 @@ jobs:
 
 
   build-for-macOS:
+    env:
+      MACOS_P12_BASE64: "${{ secrets.MACOS_P12_BASE64 }}"
     name: ${{ matrix.job.target }}
     runs-on: ${{ matrix.job.os }}
     needs: [generate-bridge]
@@ -736,6 +748,18 @@ jobs:
               vcpkg-triplet: arm64-osx,
             }
     steps:
+      - name: Validate signing secrets for verification
+        if: inputs.macos-signing-check
+        env:
+          P12_PASSWORD: ${{ secrets.MACOS_P12_PASSWORD }}
+          CODESIGN_IDENTITY: ${{ secrets.MACOS_CODESIGN_IDENTITY }}
+          NOTARIZE_JSON: ${{ secrets.MACOS_NOTARIZE_JSON }}
+        run: |
+          test -n "$MACOS_P12_BASE64"
+          test -n "$P12_PASSWORD"
+          test -n "$CODESIGN_IDENTITY"
+          test -n "$NOTARIZE_JSON"
+
       - name: Export GitHub Actions cache environment variables
         uses: actions/github-script@v6
         with:
@@ -785,6 +809,7 @@ jobs:
         with:
           p12-file-base64: ${{ secrets.MACOS_P12_BASE64 }}
           p12-password: ${{ secrets.MACOS_P12_PASSWORD }}
+          keychain-password: ${{ secrets.MACOS_P12_PASSWORD }}
           keychain: rustdesk
 
       - name: Check sign and import sign key
@@ -945,11 +970,14 @@ jobs:
           security unlock-keychain -p "${{ secrets.MACOS_P12_PASSWORD }}" rustdesk.keychain
           # start sign the DWO-Remote-Support.dmg and dmg
           rm -rf *.dmg || true
-          codesign --force --options runtime -s "${{ secrets.MACOS_CODESIGN_IDENTITY }}" --deep --strict ./flutter/build/macos/Build/Products/Release/DWO-Remote-Support.app -vvv
+          codesign --force --timestamp --options runtime --preserve-metadata=entitlements -s "${{ secrets.MACOS_CODESIGN_IDENTITY }}" --deep --strict ./flutter/build/macos/Build/Products/Release/DWO-Remote-Support.app -vvv
+          codesign --verify --deep --strict ./flutter/build/macos/Build/Products/Release/DWO-Remote-Support.app
           create-dmg --volname "DWO-Remote-Support" --icon "DWO-Remote-Support.app" 200 190 --hide-extension "DWO-Remote-Support.app" --window-size 800 400 --app-drop-link 600 185 DWO-Remote-Support-${{ env.VERSION }}.dmg ./flutter/build/macos/Build/Products/Release/DWO-Remote-Support.app
-          codesign --force --options runtime -s "${{ secrets.MACOS_CODESIGN_IDENTITY }}" --deep --strict DWO-Remote-Support-${{ env.VERSION }}.dmg -vvv
+          codesign --force --timestamp --options runtime -s "${{ secrets.MACOS_CODESIGN_IDENTITY }}" --deep --strict DWO-Remote-Support-${{ env.VERSION }}.dmg -vvv
           # notarize the dmg
           rcodesign notary-submit --api-key-path ${{ github.workspace }}/rustdesk.json  --staple DWO-Remote-Support-${{ env.VERSION }}.dmg
+          xcrun stapler validate DWO-Remote-Support-${{ env.VERSION }}.dmg
+          codesign --verify --strict DWO-Remote-Support-${{ env.VERSION }}.dmg
 
       - name: Rename rustdesk
         if: env.UPLOAD_ARTIFACT == 'true'
@@ -964,8 +992,15 @@ jobs:
             fi
           done
 
+      - name: Upload signed macOS verification package
+        if: inputs.macos-signing-check && env.MACOS_P12_BASE64 != '' && env.UPLOAD_ARTIFACT == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dwo-remote-support-signed-macos-${{ matrix.job.arch }}
+          path: dwo-remote-client-mac*.dmg
+
       - name: Publish DMG package
-        if: env.UPLOAD_ARTIFACT == 'true'
+        if: env.UPLOAD_ARTIFACT == 'true' && !inputs.macos-signing-check
         uses: softprops/action-gh-release@v1
         with:
           prerelease: true
@@ -979,7 +1014,7 @@ jobs:
       - build-for-windows-flutter
       - build-for-windows-sciter
     runs-on: ubuntu-latest
-    if: ${{ inputs.upload-artifact }}
+    if: ${{ inputs.upload-artifact && !inputs.macos-signing-check }}
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@master
@@ -1017,6 +1052,7 @@ jobs:
           files: rustdesk-${{ env.VERSION }}-unsigned.tar.gz
 
   build-rustdesk-android:
+    if: ${{ !inputs.macos-signing-check }}
     needs: [generate-bridge]
     name: build rustdesk android apk ${{ matrix.job.target }}
     runs-on: ${{ matrix.job.os }}
@@ -1319,7 +1355,7 @@ jobs:
   build-rustdesk-android-universal:
     needs: [build-rustdesk-android]
     name: build rustdesk android universal apk
-    if: ${{ inputs.upload-artifact }}
+    if: ${{ inputs.upload-artifact && !inputs.macos-signing-check }}
     runs-on: ubuntu-24.04
     env:
       reltype: release
@@ -1501,6 +1537,7 @@ jobs:
             signed-apk/rustdesk-${{ env.VERSION }}-universal${{ env.suffix }}.apk
 
   build-rustdesk-linux:
+    if: ${{ !inputs.macos-signing-check }}
     needs: [generate-bridge]
     name: build rustdesk linux ${{ matrix.job.target }}
     runs-on: ${{ matrix.job.on }}
@@ -1838,7 +1875,7 @@ jobs:
             res/rustdesk-${{ env.VERSION }}*.zst
 
   build-rustdesk-linux-sciter:
-    if: ${{ inputs.upload-artifact }}
+    if: ${{ inputs.upload-artifact && !inputs.macos-signing-check }}
     runs-on: ${{ matrix.job.on }}
     name: build-rustdesk-linux-sciter ${{ matrix.job.target }}
     strategy:
@@ -2068,7 +2105,7 @@ jobs:
     name: Build appimage ${{ matrix.job.target }}
     needs: [build-rustdesk-linux]
     runs-on: ubuntu-22.04
-    if: ${{ inputs.upload-artifact }}
+    if: ${{ inputs.upload-artifact && !inputs.macos-signing-check }}
     strategy:
       fail-fast: false
       matrix:
@@ -2120,7 +2157,7 @@ jobs:
       - build-rustdesk-linux
       - build-rustdesk-linux-sciter
     runs-on: ${{ matrix.job.on }}
-    if: ${{ inputs.upload-artifact }}
+    if: ${{ inputs.upload-artifact && !inputs.macos-signing-check }}
     strategy:
       fail-fast: false
       matrix:
